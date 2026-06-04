@@ -2,7 +2,7 @@
 
 ## Presentation
 
-"Dungeon Escape" is a collaborative survival game for up to 6 players.
+"Dungeon Escape" is a collaborative survival game for up to 6 players. It's based on the board game [Sub Terra](https://www.philibertnet.com/fr/nuts-publishing/75241-sub-terra-3770009354059.html), but with a Dungeon & Dragons theme.
 
 Each player takes on the role of a character from the Dungeons & Dragons universe. During their adventure, they will explore a network of rooms and corridors typical of Dungeons & Dragons games.
 
