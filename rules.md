@@ -239,3 +239,51 @@ Ces tuiles sont placées avec la flèche dans la direction opposée à la tuile 
 Lorsqu'un aventurier entre sur cette tuile, il doit immédiatement réussir un **jet de talent** pour ne pas perdre 1 point de vie.
 
 ## Boules de feu (x3)
+Le **Pyromancien** a la capacité d'utiliser jusqu'à 3 **boules de feu** afin de créer une ouverture vers une tuile adjacente, permettant de connecter 2 tuiles entre elles. Si la paroie sur laquelle une **boule de feu** est utilisée sans tuile adjacente, il sera possible d'**explorer** ou de **découvrir** une nouvelle tuile et de la placer à cet emplacement. L'ouverture créée ainsi reste disponible jusqu'à la fin de la partie.
+
+# Dragons
+Les **Dragons** apparaissent dans le **Donjon** à l'issue de l'**événement fâcheux** "**Dragon**" sur les tuiles **Antre de dragon**. Chaque **Dragon** se déplace pendant la phase **Dragon**, vers l'**aventurier** le plus proche.
+
+Si un **Dragon** parvient sur la même tuile qu'un ou plusieurs aventuriers, ceux-ci perdent tous leurs point de vie et deviennent **inconscients**.
+
+Il ne peut y avoir plus de 3 **Dragons** dans le **Donjon**.
+
+## Déplacement des Dragons
+
+Les **Dragons** ne se déplacent que d'une tuile à la fois et ne peuvent pas traverser les parois du **Donjon**. En revanche, ils sont insensibles aux tuiles spéciales de celui-ci, qui ne leur font ni dégât ni contraintes de déplacement.
+
+En respectant ces règles, l'**aventurier conscient** le plus proche est celui qui nécessite le moins de déplacement, depuis la position courante du **Dragon**. En cas d'égalité, c'est le niveau de l'aventurier le plus faible qui est choisi (en fonction de sa fiche de personnage).
+
+Quelques exceptions, qui font que les **aventuriers** ne sont pas identifiés comme ciblent d'un **Dragon** : 
+
+* L'aventurier est **inconscient**
+* L'aventurier est sur la tuile **Sortie**
+* L'aventurier a réussi à se cacher, en utilisant l'action **Se cacher**
+* L'aventurier a une capacité spéciale qui le protège du **Dragon** 
+
+## Apparition d'un Dragon
+Quand un **événement fâcheux** **Dragon** se produit et qu'il y a moins de 3 **Dragons** dans le **Donjon** : 
+1. Trouver la tuile **Antre de Dragon** : 
+* qui ne contient pas encore de **Dragon**, ET
+* qui est la plus proche d'un **aventurier** **conscient**
+2. S'il y a une tuile **Antre de Dragon** à 7 tuiles ou moins de distance d'un **aventurier** **conscient**, un **Dragon** apparaît sur cette tuile. Sinon, aucun **Dragon** n'apparaît dans le **Donjon** pour ce tour.
+
+## Déplacement des Dragons
+Pendant un **événement fâcheux** **Dragon** ou la phase **Dragon**, pour chaque **Dragon** présent dans le **Donjon** :
+1. Trouver quel **aventurier** est le plus proche,
+2. Si l'aventurier le plus proche est distant de plus de 7 tuiles, le **Dragon** disparaît.
+3. Sinon, le **Dragon** se déplace vers l'**aventurier** le plus proche, en suivant le chemin le plus court.
+
+# Aventuriers
+Il existe 8 aventuriers différents proposés pour explorer le **Donjon**. Ils possèdent tous un nombre de points de vie définis et des capacités spéciales.
+
+## Chasseur de l'Ombre
+* 3 points de vie
+* Niveau 1
+* **Marche de l'Ombre** : sur une tuile **Prénombre** ou **Obscurité totale**, le **Chasseur de l'Ombre** disparaît du plateau et au prochain tour, comme seule action, il peut réapparaître sur une autre tuile **Pénombre** ou **Obscurité totale**.
+* **Vision nocturne** : les tuiles **Obscurité totale** ne font perdre aucun point de vie et le **Chasseur de l'Ombre** peut y entrer en utilisant l'action **Déplacer** normalement.
+
+## Gnome
+* 3 points de vie
+* Niveau 2
+* **Repli stratégique** : jusqu'à 3 fois maximum par partie, le **Gnome** peut défausser la tuile pioche lors d'une action **Explorer le Donjon** ou **Découvrir le Donjon** et piocher la tuile suivante (qui doit être acceptée).
