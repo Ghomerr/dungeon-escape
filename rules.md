@@ -275,15 +275,53 @@ Pendant un **événement fâcheux** **Dragon** ou la phase **Dragon**, pour chaq
 3. Sinon, le **Dragon** se déplace vers l'**aventurier** le plus proche, en suivant le chemin le plus court.
 
 # Aventuriers
-Il existe 8 aventuriers différents proposés pour explorer le **Donjon**. Ils possèdent tous un nombre de points de vie définis et des capacités spéciales.
+Il existe 8 aventuriers différents proposés pour explorer le **Donjon**. Ils possèdent tous un nombre de points de vie définis et des capacités spéciales, passives ou qui requièrent un nombre de points d'actions (PA).
 
 ## Chasseur de l'Ombre
 * 3 points de vie
 * Niveau 1
-* **Marche de l'Ombre** : sur une tuile **Prénombre** ou **Obscurité totale**, le **Chasseur de l'Ombre** disparaît du plateau et au prochain tour, comme seule action, il peut réapparaître sur une autre tuile **Pénombre** ou **Obscurité totale**.
-* **Vision nocturne** : les tuiles **Obscurité totale** ne font perdre aucun point de vie et le **Chasseur de l'Ombre** peut y entrer en utilisant l'action **Déplacer** normalement.
+* **Marche de l'Ombre** (2 PA) : sur une tuile **Prénombre** ou **Obscurité totale**, le **Chasseur de l'Ombre** disparaît du plateau et au prochain tour, comme seule action, il peut réapparaître sur une autre tuile **Pénombre** ou **Obscurité totale** de son choix.
+* **Vision nocturne** (Passif) : les tuiles **Obscurité totale** ne font perdre aucun point de vie et le **Chasseur de l'Ombre** peut y entrer en utilisant l'action **Déplacer** normalement.
 
 ## Gnome
 * 3 points de vie
 * Niveau 2
-* **Repli stratégique** : jusqu'à 3 fois maximum par partie, le **Gnome** peut défausser la tuile pioche lors d'une action **Explorer le Donjon** ou **Découvrir le Donjon** et piocher la tuile suivante (qui doit être acceptée).
+* **Repli stratégique** (Passif) : jusqu'à 3 fois maximum par partie, le **Gnome** peut défausser la tuile pioche lors d'une action **Explorer le Donjon** ou **Découvrir le Donjon** et piocher la tuile suivante (qui doit être acceptée).
+* **Furtivité** (Passif) : ne peut pas être poursuivi par un **Dragon** ni même être attaqué par ce dernier en étant sur la même tuile.
+
+## Nain
+* 3 points de vie
+* Niveau 3
+* **Mémoire de la roche** (Passif) : en début de partie, la première tuile est mise de côté, face visible pour tous les joueurs. Ensuite, quand le **Nain** utilise les actions **Découvrir le Donjon** ou **Explorer le Donjon**, il peut choisir de placer la tuile piochée ou celle mise de côté. Celle qui reste est conservée face visible.
+* **Maîtrise des flammes** (1 PA) : éteint un incendie sur sa tuile ou une tuile adjacente.
+
+## Pyromancien
+* 3 points de vie
+* Niveau 4
+* **Boule de feu** (2 PA) : jusqu'à 3 fois par partie, donne la possibilité de détruire une paroie du Donjon. Cela déclenche immédiatement un **événement fâcheux** à résoudre dans les conditions habituelles.
+* **Résistance aux flammes** (Passif) : les tuiles **Incendies** ne font perdre qu'un seul point de vie (au lieu de 3 aux autres aventuriers).
+
+## Elfe Roublard
+* 3 points de vie
+* Niveau 5 
+* **Crochetage des portes** (1 PA) : dans la limite des **kits de crochetage** disponibles, les portes verrouillées peuvent être déverrouillées.
+* **Agilité eflique** (Passif) : possibilité d'entrer sur les tuiles **Ponts suspendus** ou **Incendies** pour un point d'action et sans dégâts.
+
+## Druide
+* 3 points de vie
+* Niveau 6
+* **Application de beaume** (1 PA) : restaure 1 point de vie à autre aventurier situé sur la même tuile.
+* **Célérité animale** (1 PA) : permet de faire deux actions **se Déplacer**.
+
+## Paladin 
+* 5 points de vie
+* Niveau 7
+* **Combattre le mal** (1 PA) : élimine un **Dragon** situé sur une tuile adjacente.
+* **Sacrifice** (Passif) : grâce à sa constitution hors du commun, le **Paladin** dispose de plus de points de vie. Les autres **aventuriers** situés sur la même tuile que lui ne perdront pas de points de vie lors des **événements fâcheux** suivants : **Obscurité totale**, **Poison**, **Incendie** et **Maldédiction**.
+
+## Barde 
+* 3 points de vie
+* Niveau 8
+* **Inspiration** (1 PA) : joue du Luth pour donner une action immédiate d'un point d'action à un autre aventurier.
+* **Chance** (Passif) : ajoute un bonus de 1 à tous ses **jets de talent**.
+
