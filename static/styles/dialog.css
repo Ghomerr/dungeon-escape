@@ -1,0 +1,56 @@
+/** jQuery UI dialog theming for Dungeon Escape */
+.dungeon-escape .ui-widget.ui-widget-content {
+    border: 1px solid #6b4f2a;
+    font-family: inherit;
+}
+
+.dungeon-escape .ui-widget-header {
+    background: linear-gradient(to bottom, #b58b3e, #8a6321);
+    border: 1px solid #6b4f2a;
+    color: #1c1208;
+}
+
+.dungeon-escape .ui-widget-content {
+    background: #2a2118;
+    color: #e7d3a8;
+}
+
+.dungeon-escape .ui-dialog .ui-dialog-buttonpane {
+    border-color: #6b4f2a;
+    padding: 0;
+}
+
+.dungeon-escape .ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+.dungeon-escape .ui-dialog .ui-dialog-buttonpane button {
+    margin: .5em .4em;
+}
+
+.dungeon-escape .ui-button {
+    border: 1px solid #1c1208;
+    background: linear-gradient(to bottom, #c79a47, #9c7327);
+    color: #1c1208;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.dungeon-escape .ui-button:hover {
+    background: linear-gradient(to bottom, #e0b25a, #b5842e);
+}
+
+.dungeon-escape .ui-dialog .dialog-text {
+    padding: 4px 2px;
+    line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+    .dungeon-escape .ui-dialog {
+        max-width: 95% !important;
+        max-height: 90vh !important;
+        overflow-y: auto !important;
+    }
+}

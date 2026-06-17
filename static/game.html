@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Dungeon Escape - Partie</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="static/assets/favicon.svg" />
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.14.1/themes/smoothness/jquery-ui.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" type="text/css" href="static/styles/main.css">
+    <link rel="stylesheet" type="text/css" href="static/styles/game.css">
+    <link rel="stylesheet" type="text/css" href="static/styles/dialog.css">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.14.1/jquery-ui.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="static/scripts/dialog.js"></script>
+    <script src="static/scripts/client-game.js"></script>
+</head>
+
+<body class="dungeon-escape in-game">
+    <!-- Waiting overlay until everyone reaches the game page -->
+    <div id="waiting-overlay" class="overlay">
+        <div class="overlay-card">
+            <h2><i class="fas fa-hourglass-half"></i> En attente des joueurs…</h2>
+            <p id="waiting-text">Connexion…</p>
+        </div>
+    </div>
+
+    <!-- End-of-game overlay -->
+    <div id="end-overlay" class="overlay" style="display:none;">
+        <div class="overlay-card end-card">
+            <h2 id="end-title"></h2>
+            <div id="end-rank" class="end-rank"></div>
+            <p id="end-summary"></p>
+            <button id="end-leave" class="primary"><i class="fas fa-door-open"></i> Quitter la partie</button>
+        </div>
+    </div>
+
+    <header class="game-header">
+        <div class="gh-left">
+            <span class="gh-title"><i class="fas fa-dungeon"></i> Dungeon Escape</span>
+        </div>
+        <div class="gh-center">
+            <span id="turn-info" class="turn-info"></span>
+        </div>
+        <div class="gh-right">
+            <span id="dragon-marker" class="dragon-marker" style="display:none;"></span>
+            <span id="turns-left" class="turns-left"></span>
+        </div>
+    </header>
+
+    <main class="game-main">
+        <!-- Left: party + event -->
+        <aside class="party-panel">
+            <h3>Aventuriers</h3>
+            <div id="party-list"></div>
+
+            <div id="event-box" class="event-box">
+                <h3>Événement</h3>
+                <div id="event-content" class="event-content">Aucun</div>
+            </div>
+
+            <div class="resources">
+                <div>🗝️ Kits : <span id="kit-count">-</span></div>
+                <div>🃏 Pioche : <span id="deck-count">-</span></div>
+            </div>
+        </aside>
+
+        <!-- Center: dungeon board -->
+        <section class="board-panel">
+            <div id="board-viewport" class="board-viewport">
+                <div id="board" class="board"></div>
+            </div>
+            <div class="board-hint" id="board-hint">Cliquez sur une tuile adjacente pour interagir, ou choisissez une direction.</div>
+        </section>
+
+        <!-- Right: actions + log -->
+        <aside class="actions-panel">
+            <div class="active-banner" id="active-banner"></div>
+
+            <h3>Actions de base</h3>
+            <div id="base-actions" class="action-buttons"></div>
+
+            <h3>Actions Donjon</h3>
+            <div id="dungeon-actions" class="action-buttons"></div>
+
+            <h3>Capacités <span id="active-char-name"></span></h3>
+            <div id="ability-actions" class="action-buttons"></div>
+
+            <div class="turn-controls">
+                <button id="effort-btn" class="action-btn" title="Effort : +1 PA, jet de talent en fin de tour">💪 Effort</button>
+                <button id="endturn-btn" class="action-btn primary">⏭️ Finir le tour</button>
+            </div>
+
+            <div class="emoji-bar" id="game-emoji-bar">
+                <button class="emoji-send" data-emoji="👍">👍</button>
+                <button class="emoji-send" data-emoji="😂">😂</button>
+                <button class="emoji-send" data-emoji="🔥">🔥</button>
+                <button class="emoji-send" data-emoji="😱">😱</button>
+                <button class="emoji-send" data-emoji="🐉">🐉</button>
+                <button class="emoji-send" data-emoji="❤️">❤️</button>
+            </div>
+            <div id="game-emoji-bubble" class="emoji-bubble"></div>
+
+            <h3>Journal</h3>
+            <div id="log" class="log"></div>
+        </aside>
+    </main>
+
+    <div id="simple-dialog" title="Message">
+        <div class="dialog-text"></div>
+    </div>
+
+    <!-- Direction picker dialog (directions live in the body, only Cancel in the footer) -->
+    <div id="dir-dialog" title="Choisir une direction" style="display:none;">
+        <div class="dir-picker">
+            <button class="dir-btn" data-dir="0">⬆️ Nord</button>
+            <div class="dir-row">
+                <button class="dir-btn" data-dir="3">⬅️ Ouest</button>
+                <button class="dir-btn dir-here" data-dir="here">⊙ Ici</button>
+                <button class="dir-btn" data-dir="1">Est ➡️</button>
+            </div>
+            <button class="dir-btn" data-dir="2">⬇️ Sud</button>
+        </div>
+    </div>
+
+    <!-- Generic choice dialog (buttons in the body) -->
+    <div id="choice-dialog" title="Choix" style="display:none;">
+        <div class="choice-list"></div>
+    </div>
+
+    <!-- Tile placement dialog : pick the tile + its orientation -->
+    <div id="placement-dialog" title="Placer la tuile" style="display:none;">
+        <div class="placement-content"></div>
+    </div>
+</body>
+
+</html>

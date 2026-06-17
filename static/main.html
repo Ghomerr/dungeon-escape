@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Dungeon Escape - Accueil</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="static/assets/favicon.svg" />
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.14.1/themes/smoothness/jquery-ui.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" type="text/css" href="static/styles/main.css">
+    <link rel="stylesheet" type="text/css" href="static/styles/dialog.css">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.14.1/jquery-ui.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="static/scripts/dialog.js"></script>
+    <script src="static/scripts/client.js"></script>
+</head>
+
+<body class="dungeon-escape">
+    <header>
+        <div class="head-container">
+            <img class="logo" src="static/assets/logo.svg" alt="Dungeon Escape" />
+            <div class="title-block">
+                <h1 class="game-title">Dungeon Escape</h1>
+                <p class="subtitle">Échappez-vous du Donjon… ensemble.</p>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="lobby-container">
+            <!-- Join / create form -->
+            <section id="lobby-inputs" class="panel">
+                <h2 class="panel-title">Rejoindre ou créer une salle</h2>
+                <div class="field">
+                    <i class="fas fa-user fixed-size" title="Votre pseudonyme"></i>
+                    <input id="user-id" maxlength="20" type="text" placeholder="Votre pseudonyme" />
+                </div>
+                <div class="field">
+                    <i class="fas fa-dungeon fixed-size" title="Nom de la salle"></i>
+                    <input id="room-id" type="text" placeholder="Nom de la salle" maxlength="20" />
+                    <button id="random-room-id-btn" title="Générer un nom de salle">
+                        <i class="fas fa-dice"></i>
+                    </button>
+                </div>
+                <div class="private-room-container">
+                    <span id="room-password-link"><i class="fas fa-lock"></i> Partie privée / rejoindre une privée ?</span>
+                    <div id="room-password-container" style="display:none;">
+                        <i class="fas fa-lock fixed-size"></i>
+                        <input id="room-password" type="text" placeholder="Mot de passe" maxlength="20" />
+                    </div>
+                </div>
+                <div class="button-container">
+                    <button id="lobby-btn" class="primary" disabled>
+                        <i class="fas fa-sign-in-alt"></i> Entrer
+                    </button>
+                </div>
+                <p class="hint">Un identifiant unique (UUID) est généré pour vous reconnecter de façon fiable.</p>
+            </section>
+
+            <!-- Rooms list -->
+            <section id="rooms-list" class="panel" style="display:none;">
+                <h2 class="panel-title">Parties en cours</h2>
+                <div id="rooms-list-content"></div>
+            </section>
+
+            <!-- Waiting room -->
+            <section id="waiting-room" class="panel wide" style="display:none;">
+                <h2 class="panel-title">Salle : <span id="wr-room-name"></span></h2>
+
+                <div class="wr-columns">
+                    <div class="wr-players">
+                        <h3>Joueurs <span id="wr-emoji-bubble" class="emoji-bubble"></span></h3>
+                        <ol id="wr-players-list" class="players-list-ol"></ol>
+                        <div id="wr-password-info" class="hint" style="display:none;"></div>
+
+                        <div class="difficulty-block">
+                            <h3>Difficulté</h3>
+                            <div id="wr-difficulty" class="difficulty-options">
+                                <button class="diff-btn" data-diff="normal">Normal</button>
+                                <button class="diff-btn" data-diff="advanced">Avancé</button>
+                                <button class="diff-btn" data-diff="expert">Expert</button>
+                            </div>
+                        </div>
+
+                        <div class="emoji-bar" id="wr-emoji-bar">
+                            <span>Emojis :</span>
+                            <button class="emoji-send" data-emoji="👍">👍</button>
+                            <button class="emoji-send" data-emoji="😂">😂</button>
+                            <button class="emoji-send" data-emoji="🔥">🔥</button>
+                            <button class="emoji-send" data-emoji="😱">😱</button>
+                            <button class="emoji-send" data-emoji="🐉">🐉</button>
+                            <button class="emoji-send" data-emoji="❤️">❤️</button>
+                        </div>
+
+                        <form name="lobby-form" id="start-content" action="" method="get">
+                            <input type="hidden" id="formRoomId" name="formRoomId" />
+                            <input type="hidden" id="formUserId" name="formUserId" />
+                            <input type="hidden" id="formToken" name="formToken" />
+                            <button id="start-btn" type="button" class="primary" disabled style="display:none;">
+                                <i class="fas fa-play"></i> Lancer la partie
+                            </button>
+                        </form>
+                        <p class="hint" id="wr-start-hint">Il faut 4 à 6 personnages, et chaque joueur connecté doit en contrôler au moins un.</p>
+                    </div>
+
+                    <div class="wr-characters">
+                        <h3>Choix des personnages <span id="wr-char-count"></span></h3>
+                        <div id="wr-character-grid" class="character-grid"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div id="simple-dialog" title="Message">
+            <div class="dialog-text"></div>
+        </div>
+    </main>
+
+    <footer id="footer">
+        <span id="debug-button" title="Debug"></span>
+        <span><i class="fas fa-dragon"></i></span>
+        <span class="version">Dungeon Escape <span id="version-tag"></span></span>
+        <span class="sep">—</span>
+        <span class="rules"><a href="rules.md" target="_blank"><i class="fas fa-book"></i> Règles du jeu</a></span>
+        <span class="sep">—</span>
+        <span class="twitter"><a href="https://twitter.com/Ghomerr" target="_blank"><i class="fab fa-twitter"></i> @Ghomerr</a></span>
+    </footer>
+</body>
+
+</html>
