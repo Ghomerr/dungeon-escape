@@ -137,7 +137,7 @@ Coût : 2 points d'actions. L'aventurier se déplace d'une tuile vers une tuile 
 Coût : 2 points d'actions. Sur sa tuile ou adjacente, l'aventurier peut éteindre le feu dans une tuile inflammable. Cela libère la tuile et la rend traversable à nouveau.
 
 ### Crocheter une porte
-Coût : 2 points d'actions + **jet de talent**. Un joueur peut utiliser 1 kit de crochetage pour ouvrir une porte verrouillée, si le **jet de talent** est réussi.
+Coût : 2 points d'actions + **jet de talent**. Un joueur peut utiliser 1 kit de crochetage pour ouvrir une porte verrouillée, si le **jet de talent** est réussi. Le **kit de crochetage** n'est consommé qu'en cas de **réussite** : un échec ne coûte pas de kit (mais les points d'action sont dépensés).
 
 ### Se cacher
 Coût : 2 points d'action + **jet de talent**. Si le jet réussi, l'aventurier ne pourra pas être ciblé par les dragons pendant ce tour. Si l'action est utilisée trois fois de suite, elle réussit automatiquement. 

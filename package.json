@@ -1,0 +1,20 @@
+{
+    "name": "dungeon-escape",
+    "version": "0.0.1",
+    "description": "Dungeon Escape - cooperative board game (Web version)",
+    "main": "server.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "start": "node server.js",
+        "dev": "nodemon server.js"
+    },
+    "author": "Ghomerr",
+    "license": "none",
+    "dependencies": {
+        "express": "^4.21.2",
+        "socket.io": "^4.8.1"
+    },
+    "devDependencies": {
+        "nodemon": "^3.1.9"
+    }
+}

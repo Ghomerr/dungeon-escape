@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e0b25a"/>
+      <stop offset="1" stop-color="#9c7327"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="10" fill="#241a10" stroke="#6b4f2a" stroke-width="2"/>
+  <!-- dungeon arch / door -->
+  <path d="M20 50 V28 a12 12 0 0 1 24 0 V50" fill="none" stroke="url(#g)" stroke-width="4"/>
+  <rect x="28" y="36" width="8" height="14" fill="url(#g)"/>
+  <!-- brick lines -->
+  <line x1="14" y1="50" x2="50" y2="50" stroke="#6b4f2a" stroke-width="3"/>
+  <circle cx="46" cy="18" r="3" fill="#b5482b"/>
+  <text x="32" y="61" font-size="6" fill="#c79a47" text-anchor="middle" font-family="sans-serif">ESCAPE</text>
+</svg>
