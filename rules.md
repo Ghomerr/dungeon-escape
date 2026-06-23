@@ -3,21 +3,21 @@
 Le jeu est composé de 64 tuiles **Donjon** qui seront tirées aléatoirement par les joueurs pour former le **Donjon** lors de leur exploration. 
 
 * Liste des 64 tuiles du **Donjon** : 
-    * Cul de sac simples : 2 tuiles
-    * Couloirs simples : 4 tuiles
-    * Carrefours simples (4 directions) : 3 tuiles
-    * Couloirs en T simple (3 directions) : 3 tuiles
-    * Coude simple (2 directions) : 4 tuiles
+    * Cul de sac simples : 2 tuiles - OK
+    * Couloirs simples : 4 tuiles - OK 
+    * Carrefours simples (4 directions) : 3 tuiles - OK
+    * Couloirs en T simple (3 directions) : 3 tuiles - KO (pas de tuiles)
+    * Coude simple (2 directions) : 4 tuiles - KO (pas de tuiles)
     * **Ponts suspendus** : 3 tuiles
-    * Couloirs avec **Porte verrouillée** dans le sens **avant** de marche : 3 tuiles
-    * Couloirs avec **Porte verrouillée** dans le sens **arrière** de marche : 3 tuiles
-    * Carrefours avec **Plaque piégée** : 3 tuiles
-    * Couloirs en T **Inflammables** : 8 tuiles (mais valeurs de dés différentes)
-    * Coudes **Inflammables** : 4 tuiles (mais valeurs de dés différentes)
-    * Coudes **Nauséabonds** : 6 tuiles
-    * Couloirs en T **Nauséabonds** : 2 tuiles
-    * Couloirs dans la **Pénombre** : 4 tuiles
-    * Couloirs en T dans la **Pénombre** : 2 tuiles
+    * Couloirs avec **Porte verrouillée** dans le sens **avant** de marche : 3 tuiles : KO (1 tuile)
+    * Couloirs avec **Porte verrouillée** dans le sens **arrière** de marche : 3 tuiles : KO (pas de tuile)
+    * Carrefours avec **Plaque piégée** : 3 tuiles - Partiel (Ok mais pas de flèche, juste des piques autour)
+    * Couloirs en T **Inflammables** : 8 tuiles (mais valeurs de dés différentes) - 
+    * Coudes **Inflammables** : 4 tuiles (mais valeurs de dés différentes) - KO (1 tuile)
+    * Coudes **Nauséabonds** : 6 tuiles - OK
+    * Couloirs en T **Nauséabonds** : 2 tuiles - OK
+    * Couloirs dans la **Pénombre** : 4 tuiles - OK
+    * Couloirs en T dans la **Pénombre** : 2 tuiles - OK 
     * Carrefours dans la **Pénombre** : 2 tuiles
     * Cul de sac **"Antre de dragon"** : 6 tuiles
     * Coudes **"Antre de dragon"** : 2 tuiles
@@ -286,7 +286,7 @@ Il existe 8 aventuriers différents proposés pour explorer le **Donjon**. Ils p
 ## Gnome
 * 3 points de vie
 * Niveau 2
-* **Repli stratégique** (Passif) : jusqu'à 3 fois maximum par partie, le **Gnome** peut défausser la tuile pioche lors d'une action **Explorer le Donjon** ou **Découvrir le Donjon** et piocher la tuile suivante (qui doit être acceptée).
+* **Repli stratégique** (Passif) : jusqu'à 3 fois maximum par partie, le **Gnome** peut défausser la tuile piochée lors d'une action **Explorer le Donjon** ou **Découvrir le Donjon** et piocher la tuile suivante (qui doit être acceptée).
 * **Furtivité** (Passif) : ne peut pas être poursuivi par un **Dragon** ni même être attaqué par ce dernier en étant sur la même tuile.
 
 ## Nain
