@@ -34,6 +34,70 @@ const STATE_INFO = {
     dark: { icon: '🌑', label: 'Obscurité totale', desc: 'Entrée uniquement via « Marcher dans l\'Obscurité » (2 PA).' }
 };
 
+// --- Tile art (PNG) : mapping tuile -> image + rotation ---------------------
+// Les images sont dessinees dans UNE orientation canonique ; on les fait pivoter
+// (0/90/180/270) cote CSS pour coller aux `exits` reels de la tuile.
+const ART_PATH = 'static/assets/tiles/';
+const TILE_ART = {
+    'simple|deadend': ['dead-end-1', 'dead-end-2'],
+    'simple|corridor': ['corridor-1', 'corridor-2', 'corridor-3', 'corridor-4'],
+    'simple|cross': ['crossroad-1', 'crossroad-2', 'crossroad-3'],
+    'simple|tee': ['t-junction-1', 't-junction-2', 't-junction-3'],
+    'simple|elbow': ['corner-1', 'corner-2', 'corner-3', 'corner-4'],
+    'bridge|corridor': ['bridge-1', 'bridge-2', 'bridge-3'],
+    'trap|cross': ['trap-1', 'trap-2', 'trap-3'],
+    'poisonable|elbow': ['nauseous-corner-1', 'nauseous-corner-2', 'nauseous-corner-3', 'nauseous-corner-4', 'nauseous-corner-5', 'nauseous-corner-6'],
+    'poisonable|tee': ['nauseous-t-1', 'nauseous-t-2'],
+    'gloom|corridor': ['penumbra-corridor-1', 'penumbra-corridor-2', 'penumbra-corridor-3', 'penumbra-corridor-4'],
+    'gloom|tee': ['penumbra-t-1', 'penumbra-t-2'],
+    'gloom|cross': ['penumbra-crossroad-1', 'penumbra-crossroad-2'],
+    'dragon-lair|deadend': ['dragon-deadend-1', 'dragon-deadend-2', 'dragon-deadend-3', 'dragon-deadend-4', 'dragon-deadend-5', 'dragon-deadend-6'],
+    'dragon-lair|elbow': ['dragon-corner-1', 'dragon-corner-2'],
+    'start|cross': ['entrance'],
+    'exit|deadend': ['exit']
+};
+// Exits (dirs) tels que dessines dans l'image de base, avant rotation.
+const ART_BASE_EXITS = { deadend: [0], corridor: [0, 2], elbow: [0, 1], tee: [1, 2, 3], cross: [0, 1, 2, 3] };
+
+function artPick(list, uid) { const n = list.length; return list[(((uid || 0) % n) + n) % n]; }
+
+function rotToMatch(baseExits, targetExits) {
+    if (!targetExits || !targetExits.length) return 0;
+    const tgt = targetExits.slice().sort((a, b) => a - b).join(',');
+    for (let r = 0; r < 4; r++) {
+        if (baseExits.map(e => (e + r) % 4).sort((a, b) => a - b).join(',') === tgt) return r;
+    }
+    return 0;
+}
+
+// Returns { file, rot } (rot in 0..3, quarter turns clockwise).
+function tileArt(t) {
+    // Locked / open doors : dedicated art, rotated so the door edge lands on doorDir.
+    if (t.kind === 'door-front' || t.kind === 'door-back') {
+        const style = ((((t.uid || 0) % 3) + 3) % 3) + 1;
+        const fwd = t.kind === 'door-front';
+        const file = (fwd ? 'door-forward-' : 'door-backward-') + style + (t.doorLocked ? '' : '-open');
+        const baseDoor = fwd ? 0 : 2;   // door drawn at N (forward) / S (backward)
+        const rot = (t.doorDir == null) ? 0 : (((t.doorDir - baseDoor) % 4) + 4) % 4;
+        return { file: file, rot: rot };
+    }
+    let file, baseExits;
+    if (t.kind === 'flammable') {
+        const fv = (t.fireValues || []).join('');
+        file = (t.shape === 'tee' ? 'flammable-t-' : 'flammable-corner-') + fv;
+        baseExits = ART_BASE_EXITS[t.shape] || [0, 1];
+    } else {
+        const list = TILE_ART[t.kind + '|' + t.shape] || TILE_ART['simple|' + t.shape] || ['corridor-1'];
+        file = artPick(list, t.uid);
+        baseExits = (t.kind === 'exit') ? [2] : (ART_BASE_EXITS[t.shape] || [0, 2]);
+    }
+    return { file: file, rot: rotToMatch(baseExits, t.exits) };
+}
+
+// --- Portraits d'aventuriers ------------------------------------------------
+// Les fichiers portent l'id du personnage : static/assets/adventurers/<id>.png
+function portraitUrl(id) { return 'static/assets/adventurers/' + id + '.png'; }
+
 const EVENT_INFO = {
     fire: { icon: '🔥', desc: 'Un jet de dé désigne les tuiles inflammables qui prennent feu (-3 PV ; Pyromancien -1).' },
     curse: { icon: '🌀', desc: 'Chaque aventurier conscient fait un jet de talent ; en cas d\'échec : -1 PV.' },
@@ -338,10 +402,11 @@ function renderParty(state) {
         const active = c.id === state.activeId ? ' active' : '';
         const arrow = c.id === state.activeId ? '<span class="active-arrow"></span>' : '';
         $list.append('<div class="party-card' + active + '" style="border-color:' + c.color + '">' + arrow +
-            '<div class="pc-top"><span class="pc-emoji">' + c.emoji + '</span>' +
-            '<span class="pc-name">' + c.name + '</span>' + status + '</div>' +
+            '<div class="pc-portrait" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '"></div>' +
+            '<div class="pc-info">' +
+            '<div class="pc-name-row"><span class="pc-name">' + c.name + '</span>' + status + '</div>' +
             '<div class="pc-hp">' + c.hp + '/' + c.maxHp + ' PV ' + hpBar + '</div>' +
-            '<div class="pc-owner">👤 ' + c.ownerId + '</div></div>');
+            '<div class="pc-owner">👤 ' + c.ownerId + '</div></div></div>');
     });
 }
 
@@ -394,22 +459,29 @@ function renderBoard(state) {
             .css({ top: (t.row - minR) * CELL + 'px', left: (t.col - minC) * CELL + 'px', width: CELL + 'px', height: CELL + 'px' })
             .attr('title', tileFullLabel(t));
 
-        [0, 1, 2, 3].forEach(dir => { if (t.exits.includes(dir)) $tile.append('<div class="conn conn-' + dir + '"></div>'); });
+        // Couche image (pivotee) : le PNG porte sol, murs, connecteurs et decor.
+        const art = tileArt(t);
+        $tile.append($('<div class="tile-art"></div>').css({
+            'background-image': 'url(' + ART_PATH + art.file + '.png)',
+            'transform': 'rotate(' + (art.rot * 90) + 'deg)'
+        }));
 
-        let glyph = (TILE_INFO[t.kind] || {}).icon || '';
-        if (t.state === 'fire') glyph = '🔥'; else if (t.state === 'poisoned') glyph = '☠️'; else if (t.state === 'dark') glyph = '🌑';
-        $tile.append('<div class="tile-glyph">' + glyph + '</div>');
-        if (t.kind === 'flammable' && t.fireValues) $tile.append('<div class="fire-values">' + t.fireValues.join('·') + '</div>');
-        if (t.doorLocked) {
-            const arrows = { 0: '⬆️', 1: '➡️', 2: '⬇️', 3: '⬅️' };
-            $tile.append('<div class="door-mark door-edge-' + t.doorDir + '">🔒' + (arrows[t.doorDir] || '') + '</div>');
+        // Calque d'etat (evenement facheux) : voile colore + icone, par-dessus l'image.
+        if (t.state && t.state !== 'normal' && STATE_INFO[t.state]) {
+            $tile.append('<div class="state-fx fx-' + t.state + '"></div>');
+            $tile.append('<div class="state-icon">' + STATE_INFO[t.state].icon + '</div>');
+        }
+
+        // Valeurs de des (inflammable) : overlay HTML toujours droit et lisible.
+        if (t.kind === 'flammable' && t.fireValues) {
+            $tile.append('<div class="fire-values">' + t.fireValues.join('·') + '</div>');
         }
 
         state.dragons.filter(d => d.row === t.row && d.col === t.col).forEach(() => $tile.append('<span class="token dragon-token">🐉</span>'));
         state.characters.filter(c => !c.escaped && !c.dead && c.row === t.row && c.col === t.col).forEach(c => {
             const koCls = c.conscious ? '' : ' ko';
             const activeCls = c.id === state.activeId ? ' tok-active' : '';
-            $tile.append('<span class="token char-token' + koCls + activeCls + '" style="background:' + c.color + '" title="' + c.name + ' (' + c.hp + '/' + c.maxHp + ')">' + c.emoji + '</span>');
+            $tile.append('<span class="token char-token' + koCls + activeCls + '" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '" title="' + c.name + ' (' + c.hp + '/' + c.maxHp + ')"></span>');
         });
 
         $tile.click(() => onTileClick(t));
@@ -425,11 +497,17 @@ function renderBoard(state) {
     });
 }
 
-function miniTilePreview(shape, exits, kind) {
-    let html = '<div class="mini-tile kind-' + (kind || 'simple') + '">';
-    [0, 1, 2, 3].forEach(d => { if (exits.includes(d)) html += '<div class="mini-conn mini-conn-' + d + '"></div>'; });
-    html += '<div class="mini-glyph">' + ((TILE_INFO[kind] || {}).icon || '') + '</div></div>';
-    return html;
+function miniTilePreview(cand, exits) {
+    const isDoor = cand.kind === 'door-front' || cand.kind === 'door-back';
+    const t = {
+        kind: cand.kind, shape: cand.shape, exits: exits, uid: cand.uid || 0,
+        fireValues: cand.fireValues || null,
+        doorLocked: isDoor,
+        doorDir: isDoor && exits && exits.length ? exits[0] : null
+    };
+    const art = tileArt(t);
+    return '<div class="mini-tile"><div class="mini-art" style="background-image:url(' + ART_PATH + art.file +
+        '.png);transform:rotate(' + (art.rot * 90) + 'deg)"></div></div>';
 }
 
 function renderPlacement(state) {
@@ -452,7 +530,7 @@ function renderPlacement(state) {
         const $opts = $('<div class="orient-options"></div>');
         cand.orientations.forEach((o, i) => {
             const $opt = $('<button class="orient-btn"></button>');
-            $opt.html(miniTilePreview(cand.shape, o.exits, cand.kind) + '<span class="orient-label">Orientation ' + (i + 1) + '</span>');
+            $opt.html(miniTilePreview(cand, o.exits) + '<span class="orient-label">Orientation ' + (i + 1) + '</span>');
             $opt.click(() => { $d.dialog('close'); sendAction('confirm-placement', { source: cand.source, rotation: o.rotation }); });
             $opts.append($opt);
         });

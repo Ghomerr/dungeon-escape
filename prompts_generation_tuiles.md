@@ -9,8 +9,8 @@ Le style demandé est inspiré des dessins classiques de jeux de rôle (type Don
 ## 🎨 Spécifications de Style Global
 
 Pour garantir la cohérence esthétique et la connectivité des tuiles :
-1. **Vue de dessus stricte (Orthographic Top-Down View)** : Éviter toute perspective 3D ou isométrique afin que les couloirs s'alignent parfaitement.
-2. **Connecteurs standards** : Les couloirs doivent arriver exactement au centre de chaque bord de tuile carrée, avec une largeur constante (ex. 40% de la largeur de la tuile).
+1. **Vue de dessus stricte (Orthographic Top-Down View)** : Éviter toute perspective 3D ou isométrique afin que les couloirs s'alignent parfaitement. Tuiles de 110px * 110px.
+2. **Connecteurs standards** : Les couloirs doivent arriver exactement au centre de chaque bord de tuile carrée, avec une largeur constante (ex. 40% de la largeur de la tuile, ou 26 px).
 3. **Palette de couleurs** : Tons pierre grise, dalles usées, beige parchemin, avec des touches de couleurs selon le type de tuile (vert acide pour le poison, orange/rouge pour le feu, bleu/violet sombre pour la pénombre).
 4. **Style artistique** : *Hand-drawn fantasy RPG map tile, pen and ink cross-hatching, watercolor wash on aged parchment, D&D rulebook illustration style, highly detailed.*
 
@@ -29,7 +29,7 @@ Pour générer les tuiles, combinez le **Style de Base** avec le **Prompt Spéci
 
 Pour distinguer visuellement le sens de pose et de blocage des portes, nous intégrons une signalétique claire dans le dessin de la tuile :
 *   **Sens Avant (Forward Locked Door)** : La porte verrouillée bloque la sortie de la tuile. Une grande flèche stylisée est gravée sur le sol, pointant **vers** la porte (vers l'avant). La porte est au fond du couloir, scellée par des chaînes et un cadenas.
-*   **Sens Arrière (Backward Locked Door)** : La porte verrouillée bloque le retour en arrière (l'entrée de la tuile). Une flèche sur le sol pointe **vers l'arrière** (vers l'entrée). Une grille métallique ou une lourde porte vient de se refermer et de se verrouiller derrière le point d'entrée.
+*   **Sens Arrière (Backward Locked Door)** : La porte verrouillée bloque l'arrivée de la tuile. Une grande flèche stylisée est gravée sur le sol, pointant **l'opposée** de la porte (vers l'arrière). La porte est au début du couloir, scellée par des chaînes et un cadenas.
 
 ---
 

@@ -3,24 +3,25 @@
 Le jeu est composé de 64 tuiles **Donjon** qui seront tirées aléatoirement par les joueurs pour former le **Donjon** lors de leur exploration. 
 
 * Liste des 64 tuiles du **Donjon** : 
-    * Cul de sac simples : 2 tuiles - OK
-    * Couloirs simples : 4 tuiles - OK 
-    * Carrefours simples (4 directions) : 3 tuiles - OK
+    * Cul de sac simples : 2 tuiles - (OK image 1)
+    * Couloirs simples : 4 tuiles - (OK image 1)
+    * Carrefours simples (4 directions) : 3 tuiles - (OK image 1)
     * Couloirs en T simple (3 directions) : 3 tuiles - KO (pas de tuiles)
     * Coude simple (2 directions) : 4 tuiles - KO (pas de tuiles)
-    * **Ponts suspendus** : 3 tuiles
+    * **Ponts suspendus** : 3 tuiles : OK
     * Couloirs avec **Porte verrouillée** dans le sens **avant** de marche : 3 tuiles : KO (1 tuile)
     * Couloirs avec **Porte verrouillée** dans le sens **arrière** de marche : 3 tuiles : KO (pas de tuile)
     * Carrefours avec **Plaque piégée** : 3 tuiles - Partiel (Ok mais pas de flèche, juste des piques autour)
     * Couloirs en T **Inflammables** : 8 tuiles (mais valeurs de dés différentes) - 
+    > 1-3, 1-4, 1-5, 1-6, 2-3, 2-4, 2-5, 2-6, 3-5, 3-6, 4-5, 4-6.
     * Coudes **Inflammables** : 4 tuiles (mais valeurs de dés différentes) - KO (1 tuile)
     * Coudes **Nauséabonds** : 6 tuiles - OK
     * Couloirs en T **Nauséabonds** : 2 tuiles - OK
     * Couloirs dans la **Pénombre** : 4 tuiles - OK
     * Couloirs en T dans la **Pénombre** : 2 tuiles - OK 
-    * Carrefours dans la **Pénombre** : 2 tuiles
-    * Cul de sac **"Antre de dragon"** : 6 tuiles
-    * Coudes **"Antre de dragon"** : 2 tuiles
+    * Carrefours dans la **Pénombre** : 2 tuiles - KO
+    * Cul de sac **"Antre de dragon"** : 6 tuiles - OK
+    * Coudes **"Antre de dragon"** : 2 tuiles - KO
 
 Il y a en plus : une tuile de **Départ** et une tuile de **Sortie**.
 

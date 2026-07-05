@@ -12,7 +12,7 @@
             "options": {
                 "cwd": "${workspaceFolder}",
                 "env": {
-                    "PATH": "C:\\vifweb\\util\\node-v20;${env:PATH}"
+                    "PATH": "E:\\Programs\\node-v26.4.0-win-x64;${env:PATH}"
                 }
             },
             "group": {
@@ -35,7 +35,7 @@
             "options": {
                 "cwd": "${workspaceFolder}",
                 "env": {
-                    "PATH": "C:\\vifweb\\util\\node-v20;${env:PATH}"
+                    "PATH": "E:\\Programs\\node-v26.4.0-win-x64;${env:PATH}"
                 }
             },
             "presentation": {
@@ -54,7 +54,7 @@
             "options": {
                 "cwd": "${workspaceFolder}",
                 "env": {
-                    "PATH": "C:\\vifweb\\util\\node-v20;${env:PATH}"
+                    "PATH": "E:\\Programs\\node-v26.4.0-win-x64;${env:PATH}"
                 }
             },
             "presentation": {

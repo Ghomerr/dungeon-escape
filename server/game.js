@@ -1124,6 +1124,7 @@ function rankLabel(rank) {
 
 function tileDescriptor(tile, dir) {
     return {
+        uid: tile.uid,
         kind: tile.kind,
         shape: tile.shape,
         fireValues: tile.fireValues || null,

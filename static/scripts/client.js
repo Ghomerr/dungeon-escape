@@ -11,6 +11,9 @@ const STATUS = {
 
 const Lobby = { roomStatus: STATUS.NOT_CONNECTED, inRoom: false, room: null };
 
+// Portraits d'aventuriers : les fichiers portent l'id du personnage.
+function portraitUrl(id) { return 'static/assets/adventurers/' + id + '.png'; }
+
 // If we arrived back with leftover query params, clean the URL.
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('formRoomId') || urlParams.get('formUserId')) {
@@ -206,7 +209,7 @@ Socket.on('players-list-changed', (room) => {
             '<li><b>' + a.name + '</b>' + (a.passive ? ' (Passif)' : ' (' + a.cost + ' PA)') + ' — ' + a.description + '</li>').join('');
         const ownerTag = taken ? '<div class="char-owner">Choisi par ' + sel.ownerId + '</div>' : '';
         const card = $('<div class="char-card' + (taken ? ' taken' : '') + (mine ? ' mine' : '') + '" data-char-id="' + c.id + '">' +
-            '<div class="char-emoji" style="background:' + c.color + '">' + c.emoji + '</div>' +
+            '<div class="char-portrait" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '"></div>' +
             '<div class="char-name">' + c.name + '</div>' +
             '<div class="char-meta">Niv. ' + c.level + ' · ' + c.maxHp + ' PV</div>' +
             '<ul class="char-abilities">' + abilitiesHtml + '</ul>' + ownerTag + '</div>');
