@@ -17,6 +17,32 @@ body.in-game { overflow: hidden; }
     margin-right: 10px; font-weight: bold;
 }
 
+/* ---- Central bad-event toast ---- */
+.event-toast {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 26px 48px;
+    border-radius: 16px;
+    background: var(--toast-color, #333);
+    border: 3px solid #ffffff55;
+    box-shadow: 0 0 0 4px #0006, 0 12px 40px #000b, 0 0 60px var(--toast-color, #333);
+    color: #fff;
+    text-align: center;
+    pointer-events: none;
+    text-shadow: 0 2px 6px #000a;
+    animation: toast-pop .35s ease-out;
+}
+.event-toast .toast-icon { font-size: 3.4rem; line-height: 1; }
+.event-toast .toast-label { font-size: 2.1rem; font-weight: bold; letter-spacing: 1px; }
+@keyframes toast-pop {
+    0% { transform: translate(-50%, -50%) scale(.7); }
+    60% { transform: translate(-50%, -50%) scale(1.06); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+}
+
 /* ---- 3-column game layout ---- */
 .game-main {
     display: grid;
@@ -132,7 +158,7 @@ body.in-game { overflow: hidden; }
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
 }
-/* image de la tuile (sol/murs/connecteurs/decor), pivotee pour coller aux exits */
+/* tile image (floor/walls/connectors/decor), rotated to match the exits */
 .tile-art {
     position: absolute; inset: 0; z-index: 0;
     background-size: 100% 100%; background-repeat: no-repeat;
@@ -141,7 +167,7 @@ body.in-game { overflow: hidden; }
 }
 .tile:hover { outline: 2px solid var(--gold-light); outline-offset: -2px; z-index: 6; }
 
-/* valeurs de des (inflammable) : overlay droit, style grave, toujours lisible */
+/* dice values (flammable): upright overlay, engraved style, always legible */
 .fire-values {
     position: absolute; top: 2px; left: 50%; transform: translateX(-50%); z-index: 4;
     font-size: .64rem; font-weight: bold; letter-spacing: 1px;
@@ -149,7 +175,7 @@ body.in-game { overflow: hidden; }
     text-shadow: 0 1px 0 #000, 0 -1px 0 #000, 1px 0 0 #000, -1px 0 0 #000;
 }
 
-/* calque d'evenement facheux : voile colore + lueur, par-dessus l'image */
+/* bad-event layer: coloured veil + glow, on top of the image */
 .state-fx { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
 .state-fx.fx-fire {
     background: radial-gradient(circle at 50% 60%, #ff6a0055, #a3200033);
@@ -162,8 +188,10 @@ body.in-game { overflow: hidden; }
     box-shadow: inset 0 0 14px 2px #7fd000bb;
 }
 .state-fx.fx-dark {
-    background: #05060cd8;
-    box-shadow: inset 0 0 22px 8px #000;
+    /* Darkness veil: dense enough for atmosphere, but the path stays barely
+       perceptible underneath (not fully hidden). */
+    background: #05060cab;
+    box-shadow: inset 0 0 18px 6px #000a;
 }
 .state-icon {
     position: absolute; top: 1px; right: 2px; z-index: 4;
@@ -215,7 +243,16 @@ body.in-game { overflow: hidden; }
     background-size: cover; background-position: center;
 }
 .char-token.ko { filter: grayscale(1) brightness(.7); }
-.char-token.tok-active { box-shadow: 0 0 0 2px var(--gold), 0 0 8px var(--gold); }
+/* Active adventurer: radiating white aura (like the dragon, in white). */
+.char-token.tok-active {
+    border-color: #fff;
+    z-index: 7;
+    animation: aura-white 1.3s ease-in-out infinite;
+}
+@keyframes aura-white {
+    0%, 100% { box-shadow: 0 0 0 2px #fff, 0 0 6px 2px #ffffffaa; }
+    50% { box-shadow: 0 0 0 2px #fff, 0 0 16px 6px #ffffffee; }
+}
 .dragon-token { background: #5a1d12; font-size: 1.1rem; width: 30px; height: 30px; animation: pulse 1.4s infinite; }
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 4px #ff3b1f; } 50% { box-shadow: 0 0 12px #ff3b1f; } }
 
@@ -228,6 +265,16 @@ body.in-game { overflow: hidden; }
     background: var(--panel2); border: 1px solid var(--border); margin-bottom: 8px; font-weight: bold;
 }
 .active-banner.your-turn { background: linear-gradient(to bottom, #3a5a20, #2c4416); color: #e7ffcf; border-color: #4f8f4a; }
+
+/* Selected-tile description (always visible above the actions) */
+.tile-desc {
+    background: var(--panel2); border: 1px solid var(--border); border-left: 3px solid var(--gold);
+    border-radius: 6px; padding: 8px 10px; margin-bottom: 10px;
+}
+.tile-desc .td-title { font-weight: bold; color: var(--gold-light); font-size: .92rem; }
+.tile-desc .td-body { color: var(--muted); font-size: .8rem; margin-top: 4px; line-height: 1.35; }
+.tile-desc.tile-desc-empty { border-left-color: var(--border); }
+.tile-desc .td-hint { color: var(--muted); font-size: .8rem; font-style: italic; }
 .action-buttons { display: flex; flex-direction: column; gap: 5px; }
 .action-btn { text-align: left; display: flex; align-items: center; gap: 8px; }
 .act-ico { width: 20px; text-align: center; font-size: 1.05rem; flex: 0 0 auto; }
@@ -237,6 +284,8 @@ body.in-game { overflow: hidden; }
     font-size: .8rem; color: var(--muted); background: var(--panel2);
     border: 1px dashed var(--border); border-radius: 14px; padding: 3px 10px; margin-top: 4px;
 }
+.cancel-run-btn { background: linear-gradient(to bottom, #6a3a1c, #4a2814); border-color: #a05a2c; color: #ffe; }
+.cancel-run-btn:hover:not(:disabled) { background: linear-gradient(to bottom, #7a4522, #5a3018); }
 .turn-controls { display: flex; gap: 6px; margin: 12px 0; }
 .turn-controls .action-btn { flex: 1; justify-content: center; }
 

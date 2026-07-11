@@ -11,8 +11,15 @@ const STATUS = {
 
 const Lobby = { roomStatus: STATUS.NOT_CONNECTED, inRoom: false, room: null };
 
-// Portraits d'aventuriers : les fichiers portent l'id du personnage.
+// Adventurer portraits: files are named after the character id.
 function portraitUrl(id) { return 'static/assets/adventurers/' + id + '.png'; }
+
+// Short explanation of each difficulty (shown under the buttons).
+const DIFFICULTY_DESC = {
+    normal: 'Le plus de tours avant la mort subite, et aucun événement doublé « x2 ». Idéal pour débuter.',
+    advanced: 'Moins de tours, et les événements « x2 » (à double effet) peuvent survenir.',
+    expert: 'Le moins de tours, tous les événements possibles dont les « x2 ». Le plus exigeant.'
+};
 
 // If we arrived back with leftover query params, clean the URL.
 const urlParams = new URLSearchParams(window.location.search);
@@ -173,7 +180,11 @@ Socket.on('players-list-changed', (room) => {
         const me = u.id === Player.id ? ' (vous)' : '';
         const conn = u.isConnected === false ? ' <i class="fas fa-plug-circle-xmark" title="Déconnecté"></i>' : '';
         const owned = room.selectedCharacters.filter(s => s.ownerId === u.id)
-            .map(s => (room.catalog.find(c => c.id === s.charId) || {}).emoji || '').join(' ');
+            .map(s => {
+                const c = room.catalog.find(cc => cc.id === s.charId) || {};
+                return '<span class="wr-pawn" title="' + (c.name || '') + '" style="background-image:url(' +
+                    portraitUrl(s.charId) + ');border-color:' + (c.color || '#000') + '"></span>';
+            }).join('');
         const kick = (isOwner && u.id !== room.owner)
             ? ' <span class="kick-btn" data-target="' + u.id + '" title="Expulser">❌</span>' : '';
         $list.append('<li data-uid="' + u.id + '"><span class="pname">' + crown +
@@ -198,6 +209,7 @@ Socket.on('players-list-changed', (room) => {
         if ($(this).data('diff') === room.difficulty) $(this).addClass('active');
         $(this).prop('disabled', !isOwner);
     });
+    $('#wr-difficulty-desc').text(DIFFICULTY_DESC[room.difficulty] || DIFFICULTY_DESC.normal);
 
     // Character grid
     const $grid = $('#wr-character-grid').empty();

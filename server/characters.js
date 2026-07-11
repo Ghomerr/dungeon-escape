@@ -38,8 +38,8 @@ const CHARACTERS = [
         emoji: '🧙',
         color: '#3f8f5b',
         flags: {
-            dragonImmune: true,       // Furtivité : jamais ciblé ni attaqué par un dragon
-            mulligan: true            // Repli stratégique : 3 défausses de pioche / partie
+            dragonImmune: true,       // Stealth: never targeted nor attacked by a dragon
+            mulligan: true            // Strategic retreat: 3 draw-discards per game
         },
         abilities: [
             { id: 'strategic-retreat', name: 'Repli stratégique', cost: 0, passive: true, description: 'Jusqu\'à 3 fois par partie : défausse la tuile piochée lors d\'une Découverte/Exploration et pioche la suivante (à accepter).' },
@@ -54,8 +54,8 @@ const CHARACTERS = [
         emoji: '🧔',
         color: '#b5651d',
         flags: {
-            rockMemory: true,         // garde une tuile de réserve face visible
-            extinguishCheap: true     // Maîtrise des flammes : éteint un incendie pour 1 PA
+            rockMemory: true,         // keeps a face-up reserve tile
+            extinguishCheap: true     // Flame mastery: extinguishes a fire for 1 AP
         },
         abilities: [
             { id: 'rock-memory', name: 'Mémoire de la roche', cost: 0, passive: true, description: 'Garde une tuile de réserve face visible : lors d\'une Découverte/Exploration, peut placer la tuile piochée OU celle en réserve.' },
@@ -70,8 +70,8 @@ const CHARACTERS = [
         emoji: '🧑‍🚀',
         color: '#d9472b',
         flags: {
-            fireResist: true,         // Incendies : -1 PV au lieu de -3
-            fireball: true            // 3 boules de feu / partie
+            fireResist: true,         // Fires: -1 HP instead of -3
+            fireball: true            // 3 fireballs per game
         },
         abilities: [
             { id: 'fireball', name: 'Boule de feu', cost: 2, passive: false, description: 'Jusqu\'à 3 fois : détruit une paroi pour ouvrir un passage. Déclenche immédiatement un événement fâcheux.' },
@@ -86,8 +86,8 @@ const CHARACTERS = [
         emoji: '🧝',
         color: '#2e9e8f',
         flags: {
-            lockpickCheap: true,      // Crochetage : 1 PA, dans la limite des kits
-            elvenAgility: true        // entre sur Pont / Incendie pour 1 PA sans dégât
+            lockpickCheap: true,      // Lockpicking: 1 AP, limited by available kits
+            elvenAgility: true        // enters Bridge / Fire tiles for 1 AP without damage
         },
         abilities: [
             { id: 'lockpicking', name: 'Crochetage des portes', cost: 1, passive: false, description: 'Déverrouille une porte (1 PA), dans la limite des kits de crochetage disponibles.' },
@@ -102,8 +102,8 @@ const CHARACTERS = [
         emoji: '🧑‍🌾',
         color: '#7cae3a',
         flags: {
-            balmHeal: true,           // Application de beaume : soigne autrui pour 1 PA
-            animalCelerity: true      // Célérité animale : 2 déplacements pour 1 PA
+            balmHeal: true,           // Apply balm: heals another adventurer for 1 AP
+            animalCelerity: true      // Animal celerity: 2 moves for 1 AP
         },
         abilities: [
             { id: 'apply-balm', name: 'Application de beaume', cost: 1, passive: false, description: 'Restaure 1 PV à un autre aventurier sur la même tuile (1 PA).' },
@@ -118,8 +118,8 @@ const CHARACTERS = [
         emoji: '🛡️',
         color: '#c9a227',
         flags: {
-            slayDragon: true,         // Combattre le mal : élimine un dragon adjacent
-            sacrifice: true           // protège les autres sur sa tuile des events
+            slayDragon: true,         // Smite evil: kills an adjacent dragon
+            sacrifice: true           // shields others on his tile from bad events
         },
         abilities: [
             { id: 'slay-dragon', name: 'Combattre le mal', cost: 1, passive: false, description: 'Élimine un Dragon situé sur une tuile adjacente (1 PA).' },
@@ -134,8 +134,8 @@ const CHARACTERS = [
         emoji: '🎻',
         color: '#4a7fd6',
         flags: {
-            inspiration: true,        // donne 1 PA à un autre aventurier
-            luck: true                // +1 à tous ses jets de talent
+            inspiration: true,        // grants 1 AP to another adventurer
+            luck: true                // +1 to all his talent rolls
         },
         abilities: [
             { id: 'inspiration', name: 'Inspiration', cost: 1, passive: false, description: 'Donne immédiatement 1 point d\'action à un autre aventurier (1 PA).' },

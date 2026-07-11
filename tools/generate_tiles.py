@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Generateur procedural des tuiles de Dungeon Escape.
+Procedural generator for the Dungeon Escape tiles.
 
-- Sortie : PNG 110x110 px, connecteurs de 26 px alignes sur exit_structure.png :
-    * connecteurs verticaux (haut/bas)  : bande x in [43, 69)
-    * connecteurs horizontaux (gauche/droite) : bande y in [45, 71)
-- Style : cadre parchemin/dore, sol dalle de pierre, murs sombres,
-  overlays par type (feu, poison, penombre, antre de dragon, portes, pieges, ponts).
-- 100% reproductible (aleatoire graine par nom de tuile).
+- Output: 110x110 px PNGs, 26 px connectors aligned on exit_structure.png:
+    * vertical connectors (top/bottom): band x in [43, 69)
+    * horizontal connectors (left/right): band y in [45, 71)
+- Style: parchment/gold frame, stone-slab floor, dark walls,
+  per-type overlays (fire, poison, penumbra, dragon lair, doors, traps, bridges).
+- 100% reproducible (random seeded per tile name).
 
-Usage :
-    python tools/generate_tiles.py --preview      # echantillon dans static/assets/tiles/_preview
-    python tools/generate_tiles.py --all          # les 66 tuiles dans static/assets/tiles
-    python tools/generate_tiles.py --all --out DIR # dans un dossier au choix
+Usage:
+    python tools/generate_tiles.py --preview      # sample into static/assets/tiles/_preview
+    python tools/generate_tiles.py --all          # the 66 tiles into static/assets/tiles
+    python tools/generate_tiles.py --all --out DIR # into a folder of your choice
 """
 import argparse
 import hashlib
@@ -23,12 +23,12 @@ import random
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-# ---------------------------------------------------------------- constantes
+# ---------------------------------------------------------------- constants
 W = H = 110
-# Bandes de connecteurs (half-open), SYMETRIQUES et centrees a 55 sur les 2 axes
-# pour que la rotation 90/180/270 des tuiles aligne les connecteurs au pixel pres.
-VB = (42, 68)   # x-range des couloirs verticaux (largeur 26, centre 55)
-HB = (42, 68)   # y-range des couloirs horizontaux (largeur 26, centre 55)
+# Connector bands (half-open), SYMMETRIC and centred at 55 on both axes
+# so that rotating tiles 90/180/270 aligns the connectors to the pixel.
+VB = (42, 68)   # x-range of vertical corridors (width 26, centre 55)
+HB = (42, 68)   # y-range of horizontal corridors (width 26, centre 55)
 VC = (VB[0] + VB[1]) // 2   # 55
 HC = (HB[0] + HB[1]) // 2   # 55
 
@@ -45,7 +45,7 @@ WALL_DK    = (0x22, 0x1e, 0x17)
 FRAME      = (0xC9, 0xB0, 0x80)
 FRAME_LT   = (0xEC, 0xD8, 0xAB)
 FRAME_DK   = (0x8a, 0x72, 0x48)
-INK        = (0x2b, 0x24, 0x18)   # gravures / encre
+INK        = (0x2b, 0x24, 0x18)   # carvings / ink
 
 
 def lerp(a, b, t):
@@ -63,18 +63,18 @@ def font(size):
         return ImageFont.load_default()
 
 
-# --------------------------------------------------------------- masque du sol
+# --------------------------------------------------------------- floor mask
 def floor_mask(dirs, room):
-    """Masque L (255 = sol). dirs : sous-ensemble de {'N','S','E','W'}."""
+    """L mask (255 = floor). dirs: subset of {'N','S','E','W'}."""
     m = Image.new("L", (W, H), 0)
     d = ImageDraw.Draw(m)
-    # pave central de jonction (toujours present s'il y a une ouverture)
+    # central junction pad (always present when there is an opening)
     if dirs:
         if room:
             d.rounded_rectangle([16, 16, W - 17, H - 17], radius=10, fill=255)
         else:
             d.rectangle([VB[0] - 4, HB[0] - 4, VB[1] + 3, HB[1] + 3], fill=255)
-    # stubs de couloir vers chaque ouverture
+    # corridor stubs toward each opening
     if 'N' in dirs:
         d.rectangle([VB[0], 0, VB[1] - 1, HC], fill=255)
     if 'S' in dirs:
@@ -90,7 +90,7 @@ def floor_mask(dirs, room):
 def stone_wall(rnd):
     img = Image.new("RGB", (W, H), WALL)
     d = ImageDraw.Draw(img)
-    # blocs de pierre irreguliers
+    # irregular stone blocks
     y = 0
     row = 0
     while y < H:
@@ -127,7 +127,7 @@ def stone_floor(rnd, base=FLOOR, mortar=MORTAR):
             col = lerp(FLOOR_DK, FLOOR_LT, t)
             col = jitter(rnd, lerp(col, base, 0.5), 8)
             d.rounded_rectangle([x0, y0, x1, y1], radius=2, fill=col)
-    # taches / usure
+    # stains / wear
     for _ in range(60):
         x, y = rnd.randint(0, W - 1), rnd.randint(0, H - 1)
         r = rnd.randint(1, 4)
@@ -136,7 +136,7 @@ def stone_floor(rnd, base=FLOOR, mortar=MORTAR):
     return img
 
 
-# --------------------------------------------------------------- assemblage de base
+# --------------------------------------------------------------- base assembly
 def base_tile(rnd, dirs, room=False, floor_base=FLOOR, mortar=MORTAR,
               wall_img=None, floor_img=None):
     wall = wall_img if wall_img else stone_wall(rnd)
@@ -145,28 +145,28 @@ def base_tile(rnd, dirs, room=False, floor_base=FLOOR, mortar=MORTAR,
     img = wall.copy()
     img.paste(floor, (0, 0), mask)
 
-    # ombre douce du mur sur le pourtour du sol (profondeur, sans assombrir le centre)
-    inner = mask.filter(ImageFilter.MinFilter(7))          # sol retreci
+    # soft wall shadow around the floor edge (depth, without darkening the centre)
+    inner = mask.filter(ImageFilter.MinFilter(7))          # shrunk floor
     ring = Image.new("L", (W, H), 0)
     ring.paste(mask, (0, 0))
-    ring = Image.composite(Image.new("L", (W, H), 70),     # bord du sol -> ombre
+    ring = Image.composite(Image.new("L", (W, H), 70),     # floor edge -> shadow
                            Image.new("L", (W, H), 0), mask)
-    ring.paste(0, (0, 0), inner)                            # retire l'interieur
+    ring.paste(0, (0, 0), inner)                            # remove the interior
     ring = ring.filter(ImageFilter.GaussianBlur(1.8))
     img.paste((0, 0, 0), (0, 0), ring)
     return img, mask
 
 
-# --------------------------------------------------------------- cadre parchemin
+# --------------------------------------------------------------- parchment frame
 def draw_frame(img, dirs):
     d = ImageDraw.Draw(img, "RGBA")
-    b = 4  # epaisseur bande doree
+    b = 4  # golden band thickness
 
     def open_on(edge):
         return edge in dirs
 
-    # bandes sur chaque bord, coupees a l'emplacement du connecteur si ouvert
-    # Haut / Bas : coupure sur x in VB
+    # bands on each edge, cut at the connector location when open
+    # Top / Bottom: cut on x in VB
     for (edge, yy) in (('N', 0), ('S', H - b)):
         seg = []
         if open_on(edge):
@@ -177,7 +177,7 @@ def draw_frame(img, dirs):
             d.rectangle([xa, yy, xb - 1, yy + b - 1], fill=FRAME)
             d.line([xa, yy, xb - 1, yy], fill=FRAME_LT)
             d.line([xa, yy + b - 1, xb - 1, yy + b - 1], fill=FRAME_DK)
-    # Gauche / Droite : coupure sur y in HB
+    # Left / Right: cut on y in HB
     for (edge, xx) in (('W', 0), ('E', W - b)):
         seg = []
         if open_on(edge):
@@ -189,7 +189,7 @@ def draw_frame(img, dirs):
             d.line([xx, ya, xx, yb - 1], fill=FRAME_LT)
             d.line([xx + b - 1, ya, xx + b - 1, yb - 1], fill=FRAME_DK)
 
-    # ornements de coin
+    # corner ornaments
     for (cx, cy) in ((0, 0), (W - 1, 0), (0, H - 1), (W - 1, H - 1)):
         sx = 1 if cx == 0 else -1
         sy = 1 if cy == 0 else -1
@@ -198,7 +198,7 @@ def draw_frame(img, dirs):
         d.rectangle([min(cx + sx * 3, cx + sx * 9), min(cy + sy * 3, cy + sy * 9),
                      max(cx + sx * 3, cx + sx * 9), max(cy + sy * 3, cy + sy * 9)],
                     outline=FRAME_DK)
-        # petit losange decoratif
+        # small decorative diamond
         dx, dy = cx + sx * 6, cy + sy * 6
         d.polygon([(dx, dy - 3), (dx + 3, dy), (dx, dy + 3), (dx - 3, dy)],
                   fill=FRAME_LT)
@@ -221,7 +221,7 @@ def darken(img, mask, amount):
 
 def outlined_digit(img, x, y, ch, size=13,
                    fill=(244, 236, 210), outline=INK, ow=1):
-    """Chiffre a fond clair et contour sombre, lisible sur zone sombre."""
+    """Light-filled digit with a dark outline, legible on a dark area."""
     d = ImageDraw.Draw(img)
     f = font(size)
     for dx in range(-ow, ow + 1):
@@ -232,7 +232,7 @@ def outlined_digit(img, x, y, ch, size=13,
 
 
 def wall_anchor(dirs):
-    """Point au centre d'une zone de mur (opposee aux ouvertures)."""
+    """Point at the centre of a wall area (opposite the openings)."""
     if 'N' not in dirs:
         return (VC, 19)
     if 'S' not in dirs:
@@ -241,7 +241,7 @@ def wall_anchor(dirs):
         return (20, HC)
     if 'E' not in dirs:
         return (W - 20, HC)
-    return (20, 19)   # 4 ouvertures : coin
+    return (20, 19)   # 4 openings: corner
 
 
 def draw_dice_pair(img, a, b, dirs):
@@ -251,15 +251,15 @@ def draw_dice_pair(img, a, b, dirs):
 
 
 def draw_arrow(img, direction, fill=(238, 228, 198, 235)):
-    """Grande fleche au sol (contour sombre), pointant vers 'direction'."""
+    """Large floor arrow (dark outline), pointing toward 'direction'."""
     d = ImageDraw.Draw(img, "RGBA")
     cx, cy = VC, HC
     L = 18
     if direction in ('N', 'S'):
-        sgn = -1 if direction == 'N' else 1         # -1 = vers le haut
+        sgn = -1 if direction == 'N' else 1         # -1 = upward
         tip = (cx, cy + sgn * L)
-        base = cy + sgn * (L - 10)                  # base de la pointe
-        tail = cy - sgn * L                         # extremite de la hampe
+        base = cy + sgn * (L - 10)                  # base of the arrowhead
+        tail = cy - sgn * L                         # end of the shaft
         pts = [tip, (cx - 9, base), (cx - 3, base),
                (cx - 3, tail), (cx + 3, tail),
                (cx + 3, base), (cx + 9, base)]
@@ -272,96 +272,96 @@ def draw_arrow(img, direction, fill=(238, 228, 198, 235)):
                (tail, cy - 3), (tail, cy + 3),
                (base, cy + 3), (base, cy + 9)]
     d.polygon(pts, fill=fill, outline=INK)
-    # renfort du contour
+    # outline reinforcement
     d.line(pts + [pts[0]], fill=INK, width=2, joint="curve")
 
 
 def draw_entrance_shadow(img):
-    """Ombre centrale douce pour marquer la tuile de depart."""
+    """Soft central shadow to mark the start tile."""
     sh = Image.new("L", (W, H), 0)
     sd = ImageDraw.Draw(sh)
-    sd.ellipse([VC - 18, HC - 10, VC + 18, HC + 20], fill=180)   # flaque d'ombre
-    sd.ellipse([VC - 7, HC - 17, VC + 7, HC - 3], fill=170)      # tete (silhouette)
+    sd.ellipse([VC - 18, HC - 10, VC + 18, HC + 20], fill=180)   # shadow puddle
+    sd.ellipse([VC - 7, HC - 17, VC + 7, HC - 3], fill=170)      # head (silhouette)
     sh = sh.filter(ImageFilter.GaussianBlur(3.5))
     img.paste((2, 2, 8), (0, 0), sh)
 
 
 def draw_exit(img):
-    """Portail de sortie : porte ouverte, rayons de lumiere, fleche vers la sortie."""
+    """Exit gate: open door, light rays, arrow toward the exit."""
     cx = VC
-    # rayons de lumiere dores rayonnant du portail (haut) vers l'interieur
+    # golden light rays radiating from the gate (top) toward the inside
     glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     gd = ImageDraw.Draw(glow)
     top = (cx, 6)
     for i in range(-3, 4):
         xb = cx + i * 15
         gd.polygon([top, (xb - 7, H - 6), (xb + 7, H - 6)], fill=(255, 224, 118, 46))
-    gd.ellipse([cx - 20, 0, cx + 20, 34], fill=(255, 240, 180, 60))   # halo du portail
+    gd.ellipse([cx - 20, 0, cx + 20, 34], fill=(255, 240, 180, 60))   # gate halo
     glow = glow.filter(ImageFilter.GaussianBlur(1.6))
     img.alpha_composite(glow) if img.mode == "RGBA" else \
         img.paste(Image.alpha_composite(img.convert("RGBA"), glow).convert("RGB"), (0, 0))
     d = ImageDraw.Draw(img, "RGBA")
-    # ouverture lumineuse au fond (haut-centre)
+    # bright opening at the back (top-centre)
     d.rectangle([cx - 15, 4, cx + 15, 27], fill=(255, 246, 208, 235))
     d.rectangle([cx - 15, 4, cx + 15, 27], outline=(120, 96, 40))
-    # deux battants ouverts (grille en fer forge)
+    # two open leaves (wrought-iron grate)
     for (bx0, bx1) in [(cx - 25, cx - 15), (cx + 15, cx + 25)]:
         d.rectangle([bx0, 4, bx1, 32], fill=(66, 66, 74), outline=(38, 38, 44))
         for by in range(7, 32, 5):
             d.line([bx0 + 1, by, bx1 - 1, by], fill=(46, 46, 52))
         d.line([(bx0 + bx1) // 2, 4, (bx0 + bx1) // 2, 32], fill=(90, 90, 98))
-    # fleche doree vers la sortie (haut)
+    # golden arrow toward the exit (top)
     draw_arrow(img, 'N', fill=(238, 200, 76, 245))
 
 
 def draw_door(img, edge, style='wood'):
-    """Porte verrouillee barrant le connecteur 'edge' (N/S). 3 styles distincts."""
+    """Locked door barring the 'edge' connector (N/S). 3 distinct styles."""
     d = ImageDraw.Draw(img, "RGBA")
     x0, x1 = VB[0] - 1, VB[1]
     y0 = 2 if edge == 'N' else H - 12
     y1 = y0 + 10
     cy = (y0 + y1) // 2
-    if style == 'portcullis':                     # herse : barreaux verticaux
+    if style == 'portcullis':                     # portcullis: vertical bars
         d.rectangle([x0, y0, x1, y1], fill=(52, 52, 58), outline=(34, 34, 40))
         for bx in range(x0 + 2, x1, 4):
             d.line([bx, y0 + 1, bx, y1 - 1], fill=(120, 120, 130), width=1)
         for by in (y0 + 2, y1 - 2):
             d.line([x0, by, x1, by], fill=(150, 150, 160))
-    elif style == 'iron':                         # plaque de fer rivetee
+    elif style == 'iron':                         # riveted iron plate
         d.rectangle([x0, y0, x1, y1], fill=(80, 82, 90), outline=(40, 40, 46))
         for sx in (x0 + 3, x1 - 3):
             for sy in (y0 + 2, y1 - 2):
                 d.ellipse([sx - 1, sy - 1, sx + 1, sy + 1], fill=(158, 158, 166))
         d.line([x0, cy, x1, cy], fill=(50, 50, 56))
-    else:                                         # bois clouté
+    else:                                         # studded wood
         d.rectangle([x0, y0, x1, y1], fill=(96, 62, 34), outline=(40, 26, 14))
         for i in range(x0 + 3, x1, 6):
             d.line([i, y0, i, y1], fill=(64, 40, 20))
         for sx in (x0 + 3, x1 - 3):
             for sy in (y0 + 2, y1 - 2):
                 d.ellipse([sx - 1, sy - 1, sx + 1, sy + 1], fill=(60, 60, 66))
-    # chaine + cadenas dore (commun)
+    # chain + golden padlock (common)
     d.line([x0, cy, x1, cy], fill=(64, 64, 70), width=2)
     d.ellipse([VC - 3, cy - 3, VC + 3, cy + 3], fill=(214, 182, 62), outline=(120, 90, 20))
 
 
 def draw_door_open(img, edge, style='wood'):
-    """Porte deverrouillee et OUVERTE sur le connecteur 'edge' (N/S) : passage libre."""
+    """Unlocked and OPEN door on the 'edge' connector (N/S): free passage."""
     d = ImageDraw.Draw(img, "RGBA")
     x0, x1 = VB[0] - 1, VB[1]
     y0 = 2 if edge == 'N' else H - 12
     y1 = y0 + 10
     post = (78, 52, 28) if style == 'wood' else (60, 60, 68)
-    # montants lateraux + linteau (l'encadrement reste)
+    # side posts + lintel (the frame remains)
     d.rectangle([x0 - 3, y0 - 2, x0, y1 + 1], fill=post, outline=(38, 30, 18))
     d.rectangle([x1, y0 - 2, x1 + 3, y1 + 1], fill=post, outline=(38, 30, 18))
     d.rectangle([x0 - 3, y0 - 2, x1 + 3, y0 + 1], fill=post, outline=(38, 30, 18))
     if style == 'portcullis':
-        # herse relevee : quelques stubs de barreaux qui pendent du linteau
+        # raised portcullis: a few bar stubs hanging from the lintel
         for bx in range(x0 + 2, x1, 4):
             d.line([bx, y0 + 1, bx, y0 + 4], fill=(120, 120, 130))
     else:
-        # deux demi-battants ouverts, plaques contre les montants (centre degage)
+        # two open half-leaves, flush against the posts (centre clear)
         leaf = (100, 66, 36) if style == 'wood' else (86, 88, 96)
         for (lx0, lx1) in [(x0, x0 + 5), (x1 - 5, x1)]:
             d.rectangle([lx0, y0, lx1, y1], fill=leaf, outline=(40, 26, 14))
@@ -370,17 +370,17 @@ def draw_door_open(img, edge, style='wood'):
 
 def draw_spikes(img, red=False):
     d = ImageDraw.Draw(img, "RGBA")
-    # plaque de pression centrale
+    # central pressure plate
     d.rectangle([VC - 12, HC - 12, VC + 12, HC + 12],
                 fill=(120, 108, 84), outline=(70, 60, 40))
     d.rectangle([VC - 8, HC - 8, VC + 8, HC + 8], outline=(90, 80, 55))
-    # trous a piques
+    # spike holes
     for (dx, dy) in [(-6, -6), (6, -6), (-6, 6), (6, 6), (0, 0)]:
         px, py = VC + dx, HC + dy
         col = (150, 40, 40) if red else (40, 36, 30)
         d.ellipse([px - 2, py - 2, px + 2, py + 2], fill=col)
     if red:
-        # runes rouges
+        # red runes
         for a in range(0, 360, 60):
             rx = VC + int(15 * math.cos(math.radians(a)))
             ry = HC + int(15 * math.sin(math.radians(a)))
@@ -389,7 +389,7 @@ def draw_spikes(img, red=False):
 
 
 def draw_abyss(img, mask, rnd):
-    """Remplace le sol par un gouffre sombre avec planches en bois usees."""
+    """Replace the floor with a dark chasm crossed by worn wooden planks."""
     d = ImageDraw.Draw(img, "RGBA")
     abyss = Image.new("RGB", (W, H), (10, 10, 16))
     ad = ImageDraw.Draw(abyss)
@@ -400,16 +400,16 @@ def draw_abyss(img, mask, rnd):
     wood = (120, 82, 46)
     x0, x1 = VB[0] - 2, VB[1] + 1
     for py in range(2, H, 9):
-        if rnd.random() < 0.16:          # planche manquante (rare)
+        if rnd.random() < 0.16:          # missing plank (rare)
             continue
         col = jitter(rnd, wood, 14)
         d.rectangle([x0, py, x1, py + 6], fill=col + (255,), outline=(70, 46, 24))
-        # veine du bois
+        # wood grain
         d.line([x0 + 2, py + 3, x1 - 2, py + 3], fill=(90, 60, 32))
-        if rnd.random() < 0.30:          # trou dans la planche
+        if rnd.random() < 0.30:          # hole in the plank
             hx = rnd.randint(x0 + 5, x1 - 6)
             d.ellipse([hx - 2, py + 1, hx + 2, py + 5], fill=(8, 8, 14, 255))
-    # cordes de suspension
+    # suspension ropes
     d.line([x0, 0, x0, H], fill=(150, 130, 90), width=2)
     d.line([x1, 0, x1, H], fill=(150, 130, 90), width=2)
 
@@ -420,20 +420,21 @@ def jitter_static(c, seed):
 
 
 def _torch(img, x, y):
-    """Torche murale a la position (x, y) (coin de tuile)."""
+    """Torch glow at position (x, y) (tile corner), WITHOUT a handle.
+    Radial (concentric) halo: stays consistent whatever the rotation."""
     d = ImageDraw.Draw(img, "RGBA")
-    d.rectangle([x - 2, y, x + 2, y + 11], fill=(92, 62, 32), outline=(56, 36, 18))
-    d.ellipse([x - 5, y - 12, x + 5, y + 1], fill=(240, 150, 40, 210))
-    d.ellipse([x - 3, y - 9, x + 3, y - 1], fill=(252, 228, 130, 235))
-    d.ellipse([x - 1, y - 6, x + 1, y - 2], fill=(255, 250, 210))
+    d.ellipse([x - 7, y - 7, x + 7, y + 7], fill=(240, 150, 40, 120))   # diffuse halo
+    d.ellipse([x - 5, y - 5, x + 5, y + 5], fill=(248, 178, 60, 205))   # glow
+    d.ellipse([x - 3, y - 3, x + 3, y + 3], fill=(252, 228, 130, 235))  # core
+    d.ellipse([x - 1, y - 1, x + 1, y + 1], fill=(255, 250, 210))       # hot spot
 
 
-# props ponctuels ------------------------------------------------------------
+# spot props ----------------------------------------------------------------
 def prop(img, kind, rnd, off=(0, 0)):
     d = ImageDraw.Draw(img, "RGBA")
     cx, cy = VC + off[0], HC + off[1]
     if kind == 'torch':
-        _torch(img, 13, 15)                 # coin haut-gauche (hors couloir)
+        _torch(img, 13, 15)                 # top-left corner (outside the corridor)
         return
     if kind == 'torch4':
         for (tx, ty) in [(13, 15), (W - 13, 15), (13, H - 17), (W - 13, H - 17)]:
@@ -469,21 +470,21 @@ def prop(img, kind, rnd, off=(0, 0)):
     elif kind == 'chest':
         x0, x1 = cx - 12, cx + 12
         y0, y1 = cy - 2, cy + 12
-        d.rectangle([x0, y0, x1, y1], fill=(120, 80, 44), outline=(58, 36, 18))   # corps
+        d.rectangle([x0, y0, x1, y1], fill=(120, 80, 44), outline=(58, 36, 18))   # body
         d.pieslice([x0, y0 - 9, x1, y0 + 7], 180, 360,
-                   fill=(104, 68, 36), outline=(58, 36, 18))                       # couvercle bombe
-        for fx in (x0 + 3, x1 - 3):                                                # ferrures
+                   fill=(104, 68, 36), outline=(58, 36, 18))                       # domed lid
+        for fx in (x0 + 3, x1 - 3):                                                # fittings
             d.line([fx, y0 - 3, fx, y1 - 1], fill=(86, 86, 92))
         d.line([x0, y0 + 1, x1, y0 + 1], fill=(86, 86, 92))
-        d.ellipse([cx - 3, cy + 2, cx + 3, cy + 8],                                # serrure doree
+        d.ellipse([cx - 3, cy + 2, cx + 3, cy + 8],                                # golden lock
                   fill=(236, 198, 74), outline=(150, 110, 20))
-        d.point((cx, cy + 5), fill=(90, 66, 18))                                   # trou de serrure
+        d.point((cx, cy + 5), fill=(90, 66, 18))                                   # keyhole
     elif kind == 'bones':
-        # os facon 8===8 : lobe (2 ronds) + hampe + lobe, contour sombre pour le relief
+        # bone shaped 8===8: lobe (2 circles) + shaft + lobe, dark outline for relief
         lx, rx = cx - 8, cx + 8
-        for col, r, lw in ((( 54, 48, 40), 4, 6),      # contour sombre (plus gros)
-                           ((238, 234, 220), 3, 3)):   # os blanc par-dessus
-            d.line([lx, cy, rx, cy], fill=col, width=lw)          # hampe ===
+        for col, r, lw in ((( 54, 48, 40), 4, 6),      # dark outline (thicker)
+                           ((238, 234, 220), 3, 3)):   # white bone on top
+            d.line([lx, cy, rx, cy], fill=col, width=lw)          # shaft ===
             for kx in (lx, rx):                                   # lobes 8
                 d.ellipse([kx - r, cy - 3 - r, kx + r, cy - 3 + r], fill=col)
                 d.ellipse([kx - r, cy + 3 - r, kx + r, cy + 3 + r], fill=col)
@@ -497,28 +498,28 @@ def prop(img, kind, rnd, off=(0, 0)):
             y = cy + rnd.randint(-2, 16)
             d.ellipse([x - 2, y - 2, x + 2, y + 2], fill=(232, 196, 72), outline=(150, 110, 20))
     elif kind == 'claws':
-        # 3 balafres quasi verticales, gravure sombre + arete claire (profondeur)
+        # 3 near-vertical scratches, dark carving + light ridge (depth)
         for k in range(3):
             ox = cx - 8 + k * 8
-            d.line([ox, cy - 12, ox + 2, cy + 12], fill=(52, 38, 28, 220), width=2)   # creux
-            d.line([ox + 2, cy - 11, ox + 4, cy + 11], fill=(150, 128, 104, 200), width=1)  # arete
+            d.line([ox, cy - 12, ox + 2, cy + 12], fill=(52, 38, 28, 220), width=2)   # groove
+            d.line([ox + 2, cy - 11, ox + 4, cy + 11], fill=(150, 128, 104, 200), width=1)  # ridge
     elif kind == 'embers':
-        # petit foyer de braises : charbons sombres + lueur orange (pas du sang)
+        # small ember bed: dark coals + orange glow (not blood)
         for _ in range(9):
             x, y = cx + rnd.randint(-13, 13), cy + rnd.randint(-9, 11)
-            d.ellipse([x - 2, y - 2, x + 2, y + 2], fill=(38, 22, 16, 230))     # charbon
+            d.ellipse([x - 2, y - 2, x + 2, y + 2], fill=(38, 22, 16, 230))     # coal
         for _ in range(11):
             x, y = cx + rnd.randint(-12, 12), cy + rnd.randint(-8, 10)
-            d.ellipse([x - 1, y - 1, x + 2, y + 2], fill=(248, 138, 40, 235))   # braise
-            d.point((x, y), fill=(255, 224, 130))                               # coeur chaud
+            d.ellipse([x - 1, y - 1, x + 2, y + 2], fill=(248, 138, 40, 235))   # ember
+            d.point((x, y), fill=(255, 224, 130))                               # hot core
     elif kind == 'skull':
         d.ellipse([cx - 9, cy - 12, cx + 9, cy + 4], fill=(220, 212, 192),
                   outline=(120, 112, 96))
-        d.ellipse([cx - 6, cy - 6, cx - 2, cy - 1], fill=(40, 34, 30))    # oeil gauche
-        d.ellipse([cx + 2, cy - 6, cx + 6, cy - 1], fill=(40, 34, 30))    # oeil droit
-        d.line([cx - 1, cy, cx - 2, cy + 3], fill=(40, 34, 30))          # narine gauche
-        d.line([cx + 1, cy, cx + 2, cy + 3], fill=(40, 34, 30))          # narine droite
-        for i in range(4):                                                # 4 dents, tuckees sous le crane
+        d.ellipse([cx - 6, cy - 6, cx - 2, cy - 1], fill=(40, 34, 30))    # left eye
+        d.ellipse([cx + 2, cy - 6, cx + 6, cy - 1], fill=(40, 34, 30))    # right eye
+        d.line([cx - 1, cy, cx - 2, cy + 3], fill=(40, 34, 30))          # left nostril
+        d.line([cx + 1, cy, cx + 2, cy + 3], fill=(40, 34, 30))          # right nostril
+        for i in range(4):                                                # 4 teeth, tucked under the skull
             tx = cx - 5 + i * 3
             d.rectangle([tx, cy + 2, tx + 1, cy + 5], fill=(236, 230, 214))
     elif kind == 'nest':
@@ -546,7 +547,7 @@ def prop(img, kind, rnd, off=(0, 0)):
         d.ellipse([9, cy - 8, 14, cy - 1], fill=(250, 220, 120, 230))
 
 
-# --------------------------------------------------------------- rendu d'une tuile
+# --------------------------------------------------------------- rendering a tile
 def render(spec):
     rnd = random.Random(int(hashlib.md5(spec['name'].encode()).hexdigest(), 16) & 0xffffffff)
     dirs = set(spec['dirs'])
@@ -570,7 +571,7 @@ def render(spec):
     if theme == 'bridge':
         draw_abyss(img, mask, rnd)
 
-    # teintes d'ambiance
+    # ambient tints
     if theme == 'nauseous':
         tint_floor(img, mask, (70, 150, 40), 0.28)
     elif theme == 'penumbra':
@@ -583,14 +584,14 @@ def render(spec):
 
     draw_frame(img, dirs)
 
-    # decor specifique (decalage si plusieurs objets pour eviter la superposition)
+    # specific decor (offset when several objects, to avoid overlap)
     props = spec.get('props', [])
     offs = {1: [(0, 0)], 2: [(-11, -6), (11, 7)],
             3: [(-13, -6), (12, -4), (0, 12)]}.get(len(props), [(0, 0)] * len(props))
     for p, o in zip(props, offs):
         prop(img, p, rnd, off=o)
-    # NB : les valeurs de des ne sont PLUS cuites dans l'image (overlay HTML droit
-    # cote client, pour rester lisibles quelle que soit la rotation de la tuile).
+    # NB: dice values are NO LONGER baked into the image (upright HTML overlay
+    # client-side, so they stay legible whatever the tile rotation).
     if spec.get('door_open'):
         draw_door_open(img, spec['door'], spec.get('door_style', 'wood'))
     elif 'door' in spec:
@@ -604,7 +605,7 @@ def render(spec):
     if spec.get('exitgate'):
         draw_exit(img)
 
-    # vignette parchemin subtile
+    # subtle parchment vignette
     vign = Image.new("L", (W, H), 0)
     vd = ImageDraw.Draw(vign)
     vd.ellipse([-30, -30, W + 30, H + 30], fill=26)
@@ -615,90 +616,92 @@ def render(spec):
     return img.convert("RGBA")
 
 
-# --------------------------------------------------------------- liste des 66 tuiles
+# --------------------------------------------------------------- list of the 66 tiles
 def all_specs():
     S = []
-    # --- speciales
+    # --- special
     S.append(dict(name='entrance', dirs='NSEW', room=True, props=['torch4'], entrance=True))
     S.append(dict(name='exit', dirs='S', room=True, exitgate=True))
-    # --- culs-de-sac simples (2)
+    # --- simple dead-ends (2)
     S.append(dict(name='dead-end-1', dirs='N', room=True, props=['cobweb']))
     S.append(dict(name='dead-end-2', dirs='N', room=True, props=['bones']))
-    # --- couloirs simples (4)
+    # --- simple corridors (4)
     S.append(dict(name='corridor-1', dirs='NS'))
     S.append(dict(name='corridor-2', dirs='NS', props=['puddle']))
     S.append(dict(name='corridor-3', dirs='NS', props=['torch']))
     S.append(dict(name='corridor-4', dirs='NS', props=['moss']))
-    # --- carrefours simples (3)
+    # --- simple crossroads (3)
     S.append(dict(name='crossroad-1', dirs='NSEW', room=True))
     S.append(dict(name='crossroad-2', dirs='NSEW', room=True, props=['grate']))
     S.append(dict(name='crossroad-3', dirs='NSEW', room=True, props=['runes']))
-    # --- T simples (3)
+    # --- simple T-junctions (3)
     S.append(dict(name='t-junction-1', dirs='WES'))
     S.append(dict(name='t-junction-2', dirs='WES', props=['cobweb']))
     S.append(dict(name='t-junction-3', dirs='WES', props=['chains']))
-    # --- coudes simples (4)
+    # --- simple elbows (4)
+    # NB: all elbows are drawn in the SAME canonical orientation (NE);
+    # the display rotation is computed client-side (rotToMatch) from the exits.
     S.append(dict(name='corner-1', dirs='NE'))
     S.append(dict(name='corner-2', dirs='NE', props=['moss']))
-    S.append(dict(name='corner-3', dirs='NW', props=['runes']))
-    S.append(dict(name='corner-4', dirs='SE', props=['bones']))
-    # --- ponts (3)
+    S.append(dict(name='corner-3', dirs='NE', props=['runes']))
+    S.append(dict(name='corner-4', dirs='NE', props=['bones']))
+    # --- bridges (3)
     S.append(dict(name='bridge-1', dirs='NS', theme='bridge'))
     S.append(dict(name='bridge-2', dirs='NS', theme='bridge'))
     S.append(dict(name='bridge-3', dirs='NS', theme='bridge'))
     door_styles = ['wood', 'iron', 'portcullis']
-    # --- portes avant (3) : porte au fond (N), fleche VERS la porte (N)
+    # --- front doors (3): door at the far side (N), arrow TOWARD the door (N)
     for i in range(1, 4):
         S.append(dict(name=f'door-forward-{i}', dirs='NS', door='N', arrow='N',
                       door_style=door_styles[i - 1]))
-    # --- portes arriere (3) : porte a l'entree (S), fleche A L'OPPOSE de la porte (N)
+    # --- back doors (3): door at the entrance (S), arrow OPPOSITE the door (N)
     for i in range(1, 4):
         S.append(dict(name=f'door-backward-{i}', dirs='NS', door='S', arrow='N',
                       door_style=door_styles[i - 1]))
-    # --- variantes PORTE OUVERTE (crochetee) : memes styles, passage libre
+    # --- OPEN DOOR variants (picked): same styles, free passage
     for i in range(1, 4):
         S.append(dict(name=f'door-forward-{i}-open', dirs='NS', door='N', arrow='N',
                       door_open=True, door_style=door_styles[i - 1]))
         S.append(dict(name=f'door-backward-{i}-open', dirs='NS', door='S', arrow='N',
                       door_open=True, door_style=door_styles[i - 1]))
-    # --- plaques piegees (3) : carrefour
+    # --- trapped plates (3): crossroads
     S.append(dict(name='trap-1', dirs='NSEW', room=True, spikes=True))
     S.append(dict(name='trap-2', dirs='NSEW', room=True, spikes=True))
     S.append(dict(name='trap-3', dirs='NSEW', room=True, spikes=True, red=True))
-    # --- T inflammables (8)
+    # --- flammable T-junctions (8)
     for a, b in [(1, 3), (1, 4), (1, 5), (1, 6), (2, 3), (2, 4), (2, 5), (2, 6)]:
         S.append(dict(name=f'flammable-t-{a}{b}', dirs='WES', theme='flammable',
                       dice=(a, b), props=['straw']))
-    # --- coudes inflammables (4)
+    # --- flammable elbows (4)
     for a, b in [(3, 5), (3, 6), (4, 5), (4, 6)]:
         S.append(dict(name=f'flammable-corner-{a}{b}', dirs='NE', theme='flammable',
                       dice=(a, b), props=['straw']))
-    # --- coudes nauseabonds (6)
+    # --- nauseous elbows (6)
     naus = ['slime', 'slime', 'mushroom', 'moss', 'slime', 'moss']
     for i in range(1, 7):
         S.append(dict(name=f'nauseous-corner-{i}', dirs='NE', theme='nauseous',
                       props=[naus[i - 1]]))
-    # --- T nauseabonds (2)
+    # --- nauseous T-junctions (2)
     S.append(dict(name='nauseous-t-1', dirs='WES', theme='nauseous', props=['slime']))
     S.append(dict(name='nauseous-t-2', dirs='WES', theme='nauseous', props=['mushroom']))
-    # --- couloirs penombre (4)
+    # --- penumbra corridors (4)
     for i in range(1, 5):
         pr = ['candle'] if i == 1 else (['crystal'] if i == 2 else [])
         S.append(dict(name=f'penumbra-corridor-{i}', dirs='NS', theme='penumbra', props=pr))
-    # --- T penombre (2)
+    # --- penumbra T-junctions (2)
     S.append(dict(name='penumbra-t-1', dirs='WES', theme='penumbra'))
     S.append(dict(name='penumbra-t-2', dirs='WES', theme='penumbra', props=['crystal']))
-    # --- carrefours penombre (2)
+    # --- penumbra crossroads (2)
     S.append(dict(name='penumbra-crossroad-1', dirs='NSEW', room=True, theme='penumbra'))
     S.append(dict(name='penumbra-crossroad-2', dirs='NSEW', room=True, theme='penumbra',
                   props=['crystal']))
-    # --- antres dragon culs-de-sac (6) : un peu de tout (os, or, coffres, griffures...)
+    # --- dragon-lair dead-ends (6): a bit of everything (bones, gold, chests, claws...)
     dprops = [['embers', 'bones'], ['gold', 'chest'], ['claws', 'bones'],
               ['nest', 'claws'], ['skull', 'gold'], ['chest', 'embers']]
     for i in range(1, 7):
         S.append(dict(name=f'dragon-deadend-{i}', dirs='N', room=True, theme='dragon',
                       props=dprops[i - 1]))
-    # --- antres dragon coudes (2)
+    # --- dragon-lair elbows (2)
     S.append(dict(name='dragon-corner-1', dirs='NE', theme='dragon', props=['gold', 'claws']))
     S.append(dict(name='dragon-corner-2', dirs='NE', theme='dragon', props=['bones', 'chest']))
     return S

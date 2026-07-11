@@ -19,11 +19,18 @@
 </head>
 
 <body class="dungeon-escape in-game">
+    <!-- Central toast announcing a bad event -->
+    <div id="event-toast" class="event-toast" style="display:none;"></div>
+
     <!-- Waiting overlay until everyone reaches the game page -->
     <div id="waiting-overlay" class="overlay">
         <div class="overlay-card">
             <h2><i class="fas fa-hourglass-half"></i> En attente des joueurs…</h2>
             <p id="waiting-text">Connexion…</p>
+            <p class="hint" id="waiting-sub">La partie reprendra dès leur retour. Elle se termine automatiquement après 5 minutes d'absence.</p>
+            <button id="pause-end-btn" class="primary" style="display:none;">
+                <i class="fas fa-flag-checkered"></i> Terminer la partie maintenant
+            </button>
         </div>
     </div>
 
@@ -78,6 +85,10 @@
         <!-- Right: actions + log -->
         <aside class="actions-panel">
             <div class="active-banner" id="active-banner"></div>
+
+            <div id="tile-desc" class="tile-desc tile-desc-empty">
+                <span class="td-hint">Cliquez une tuile pour voir sa description.</span>
+            </div>
 
             <h3>Actions de base</h3>
             <div id="base-actions" class="action-buttons"></div>

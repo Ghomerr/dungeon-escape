@@ -134,7 +134,7 @@ function initGame(room) {
         difficulty: room.difficulty,
         deck,
         board: { '0,0': start },
-        reserveTile: deck.length ? deck.shift() : null, // Dwarf's "Mémoire de la roche" face-up tile
+        reserveTile: deck.length ? deck.shift() : null, // Dwarf's "Rock memory" face-up tile
         characters,
         order: characters.map(c => c.id),
         firstIndex: 0,
@@ -142,6 +142,7 @@ function initGame(room) {
         activeId: null,
         ap: 0,
         freeMoves: 0,
+        freeMoveGrant: null,    // cancelable Run / Animal Celerity grant (until the first move)
         effortUsed: false,
         round: 0,
         phase: PHASE.ACTION,
@@ -194,6 +195,7 @@ function startRound(room) {
         if (!c.escaped && !c.dead) ordered.push(id);
     }
     g.queue = ordered;
+    g.roundStartCount = ordered.length; // adventurers scheduled to play this round
     pushLog(room, '— Tour ' + g.round + ' —');
     activateNext(room);
 }
@@ -222,6 +224,7 @@ function activateNext(room) {
     g.phase = PHASE.ACTION;
     g.effortUsed = false;
     g.freeMoves = 0;
+    g.freeMoveGrant = null;
 
     // A shadow-walked hunter reappears as its only action : it just gets a turn.
     if (!c.conscious) {
@@ -256,6 +259,7 @@ function endTurn(room) {
         g.activeId = ctx.activeId;
         g.ap = ctx.ap;
         g.freeMoves = ctx.freeMoves;
+        g.freeMoveGrant = ctx.freeMoveGrant;
         g.effortUsed = ctx.effortUsed;
         g.phase = PHASE.ACTION;
         const back = getChar(g, g.activeId);
@@ -388,6 +392,8 @@ function canEnterByMove(char, tile) {
  * `free` = no entering hazard applied for the move itself (e.g. elf agility).
  */
 function enterTile(room, char, tile, opts = {}) {
+    // The first movement of a Run / Animal Celerity locks it in (no more cancel).
+    room.game.freeMoveGrant = null;
     char.row = tile.row;
     char.col = tile.col;
 
@@ -447,7 +453,7 @@ function doMove(room, char, payload, opts = {}) {
         return { ok: false, error: 'blocked' };
     }
 
-    // Spend a free move first (Run / Célérité), otherwise an action point.
+    // Spend a free move first (Run / Celerity), otherwise an action point.
     const cost = opts.cost !== undefined ? opts.cost : 1;
     if (g.freeMoves > 0 && cost === 1 && !opts.forceAp) {
         g.freeMoves -= 1;
@@ -472,6 +478,8 @@ function doMove(room, char, payload, opts = {}) {
 function beginPlacement(mode) {
     return function (room, char, payload) {
         const g = room.game;
+        // During a Run / Animal Celerity only movement is allowed.
+        if (g.freeMoves > 0) return { ok: false, error: 'run-move-only' };
         if (g.ap < 1) return { ok: false, error: 'no-ap' };
         const dir = payload.dir;
         if (dir === undefined || dir === null) return { ok: false, error: 'no-direction' };
@@ -500,6 +508,42 @@ function beginPlacement(mode) {
     };
 }
 
+/**
+ * Distinct orientations a tile may take at cell (nr,nc) when discovered in
+ * direction `dir` from the source. A valid orientation must:
+ *   - connect back to the source tile (so the new tile is reachable), and
+ *   - match EVERY adjacent placed tile (a corridor on one side must face a
+ *     corridor on the other, never a wall) — i.e. no "corridor into a wall".
+ * Falls back to the source-only orientations if nothing matches all neighbours
+ * (so an awkward drawn tile can still be placed rather than blocking the turn).
+ */
+function orientationsForPlacement(g, shape, nr, nc, dir) {
+    const base = Tiles.BASE_EXITS[shape] || [0];
+    const opp = Tiles.opposite(dir);
+    // For each side, whether the adjacent placed tile opens toward our cell.
+    const neighbourOpens = {};
+    for (let d = 0; d < 4; d++) {
+        const nb = tileAt(g, nr + Tiles.DELTA[d].row, nc + Tiles.DELTA[d].col);
+        if (nb) neighbourOpens[d] = nb.exits.includes(Tiles.opposite(d));
+    }
+    const seen = {};
+    const out = [];
+    for (let r = 0; r < 4; r++) {
+        const exits = base.map(e => (e + r) % 4).sort((a, b) => a - b);
+        const key = exits.join(',');
+        if (seen[key]) continue;
+        if (!exits.includes(opp)) continue; // must connect back to the source
+        let matchesAll = true;
+        for (const d of Object.keys(neighbourOpens)) {
+            if (exits.includes(Number(d)) !== neighbourOpens[d]) { matchesAll = false; break; }
+        }
+        if (!matchesAll) continue;
+        seen[key] = true;
+        out.push({ rotation: r, exits });
+    }
+    return out.length ? out : Tiles.orientationsFor(shape, dir);
+}
+
 /** Step 2 : finalize the placement with the chosen tile + orientation. */
 function confirmPlacement(room, char, payload) {
     const g = room.game;
@@ -516,7 +560,7 @@ function confirmPlacement(room, char, payload) {
     }
 
     // Validate the chosen rotation; fall back to the first valid orientation.
-    const orientations = Tiles.orientationsFor(tile.shape, p.dir);
+    const orientations = orientationsForPlacement(g, tile.shape, p.nr, p.nc, p.dir);
     let rotation = payload.rotation;
     if (!orientations.some(o => o.rotation === rotation)) {
         rotation = orientations.length ? orientations[0].rotation : 0;
@@ -552,7 +596,7 @@ function cancelPlacement(room, char) {
     return { ok: true };
 }
 
-/** Gnome's "Repli stratégique" : discard the pending drawn tile, draw the next. */
+/** Gnome's "Strategic retreat" : discard the pending drawn tile, draw the next. */
 function rerollPlacement(room, char) {
     const g = room.game;
     const p = g.pending;
@@ -579,12 +623,36 @@ function tileLabel(tile) {
 // Other base / dungeon actions
 // ---------------------------------------------------------------------------
 
+// Grant free moves (Run / Animal Celerity) and remember the spent AP so the
+// player can cancel it as long as no movement has started yet.
+function grantFreeMoves(g, kind, apCost, moves) {
+    g.freeMoves += moves;
+    if (g.freeMoveGrant) {
+        g.freeMoveGrant.ap += apCost;
+        g.freeMoveGrant.moves += moves;
+    } else {
+        g.freeMoveGrant = { kind, ap: apCost, moves };
+    }
+}
+
 function doRun(room, char, payload) {
     const g = room.game;
     if (g.ap < 2) return { ok: false, error: 'no-ap' };
     spendAp(g, 2);
-    g.freeMoves += 3;
+    grantFreeMoves(g, 'run', 2, 3);
     pushLog(room, '🏃 ' + char.name + ' court (3 déplacements).');
+    return { ok: true };
+}
+
+// Refund a not-yet-started Run / Animal Celerity.
+function doCancelRun(room, char, payload) {
+    const g = room.game;
+    const grant = g.freeMoveGrant;
+    if (!grant) return { ok: false, error: 'nothing-to-cancel' };
+    g.ap += grant.ap;
+    g.freeMoves = Math.max(0, g.freeMoves - grant.moves);
+    g.freeMoveGrant = null;
+    pushLog(room, '↩️ ' + char.name + ' annule ' + (grant.kind === 'run' ? 'sa course' : 'sa célérité animale') + '.');
     return { ok: true };
 }
 
@@ -639,18 +707,10 @@ function doExtinguish(room, char, payload, forcedCost) {
 
 function doPickLock(room, char, payload) {
     const g = room.game;
-    // Door is on an edge of the current tile (the locked door tile).
-    const here = tileAt(g, char.row, char.col);
-    const dir = payload.dir;
-    let doorTile = null;
-    if (here.doorLocked && (dir === undefined || here.doorDir === dir)) {
-        doorTile = here;
-    } else if (dir !== undefined) {
-        const d = Tiles.DELTA[dir];
-        const adj = tileAt(g, char.row + d.row, char.col + d.col);
-        if (adj && adj.doorLocked) doorTile = adj;
-    }
-    if (!doorTile) return { ok: false, error: 'no-door' };
+    // Per the rules, a door is always picked from the tile you stand on (whatever
+    // its direction). You first move onto the locked door tile, then pick it.
+    const doorTile = tileAt(g, char.row, char.col);
+    if (!doorTile || !doorTile.doorLocked) return { ok: false, error: 'no-door' };
     if (g.lockpickKits <= 0) return { ok: false, error: 'no-kits' };
 
     const cost = char.flags.lockpickCheap ? 1 : 2;
@@ -717,7 +777,7 @@ function doAbility(room, char, payload) {
             if (!char.flags.animalCelerity) return { ok: false, error: 'no-ability' };
             if (g.ap < 1) return { ok: false, error: 'no-ap' };
             spendAp(g, 1);
-            g.freeMoves += 2;
+            grantFreeMoves(g, 'animal-celerity', 1, 2);
             pushLog(room, '🐾 ' + char.name + ' utilise Célérité animale (2 déplacements).');
             return { ok: true };
         }
@@ -743,10 +803,11 @@ function doAbility(room, char, payload) {
             if (!target || target.id === char.id || target.escaped || target.dead || !target.conscious) return { ok: false, error: 'bad-target' };
             spendAp(g, 1);
             // The inspired adventurer plays immediately with 1 bonus action point.
-            g.interruptStack.push({ activeId: g.activeId, ap: g.ap, freeMoves: g.freeMoves, effortUsed: g.effortUsed });
+            g.interruptStack.push({ activeId: g.activeId, ap: g.ap, freeMoves: g.freeMoves, freeMoveGrant: g.freeMoveGrant, effortUsed: g.effortUsed });
             g.activeId = target.id;
             g.ap = 1;
             g.freeMoves = 0;
+            g.freeMoveGrant = null;
             g.effortUsed = false;
             pushLog(room, '🎵 ' + char.name + ' inspire ' + target.name + ' : il joue immédiatement (+1 PA) !');
             return { ok: true };
@@ -828,6 +889,7 @@ const ACTIONS = {
     explore: beginPlacement('explore'),
     move: (room, c, p) => doMove(room, c, p, { elf: c.flags.elvenAgility }),
     run: doRun,
+    'cancel-run': doCancelRun,
     heal: doHeal,
     'walk-dark': doWalkDark,
     'walk-bridge': doWalkBridge,
@@ -862,7 +924,7 @@ function nearestTarget(g, dragon) {
 function knockOutCharsOnCell(room, row, col) {
     const g = room.game;
     for (const c of charsOnCell(g, row, col)) {
-        if (c.flags.dragonImmune) continue; // Gnome furtivité
+        if (c.flags.dragonImmune) continue; // Gnome stealth
         if (c.conscious) {
             c.hp = 0;
             c.conscious = false;
@@ -1122,13 +1184,13 @@ function rankLabel(rank) {
 // Client-facing serialisable state
 // ---------------------------------------------------------------------------
 
-function tileDescriptor(tile, dir) {
+function tileDescriptor(g, tile, p) {
     return {
         uid: tile.uid,
         kind: tile.kind,
         shape: tile.shape,
         fireValues: tile.fireValues || null,
-        orientations: Tiles.orientationsFor(tile.shape, dir)
+        orientations: orientationsForPlacement(g, tile.shape, p.nr, p.nc, p.dir)
     };
 }
 
@@ -1136,9 +1198,9 @@ function serializePending(g) {
     const p = g.pending;
     if (!p) return null;
     const char = getChar(g, p.charId);
-    const candidates = [{ source: 'deck', ...tileDescriptor(p.deckTile, p.dir) }];
+    const candidates = [{ source: 'deck', ...tileDescriptor(g, p.deckTile, p) }];
     if (p.reserveOffered && g.reserveTile) {
-        candidates.push({ source: 'reserve', ...tileDescriptor(g.reserveTile, p.dir) });
+        candidates.push({ source: 'reserve', ...tileDescriptor(g, g.reserveTile, p) });
     }
     return {
         mode: p.mode,
@@ -1174,12 +1236,15 @@ function buildState(room) {
         activeOwnerId: active ? active.ownerId : null,
         ap: g.ap,
         freeMoves: g.freeMoves,
+        cancelRunKind: g.freeMoveGrant ? g.freeMoveGrant.kind : null,
         effortUsed: g.effortUsed,
         order: g.order,
         firstIndex: g.firstIndex,
         eventsTotal: g.eventsTotal,
         eventsResolved: g.eventsResolved,
         turnsLeft: Math.max(0, g.eventsTotal - g.eventsResolved),
+        turnTotal: g.roundStartCount || g.queue.length,
+        turnRemaining: g.queue.length,
         suddenDeath: g.suddenDeath,
         currentEvent: g.currentEvent,
         lockpickKits: g.lockpickKits,

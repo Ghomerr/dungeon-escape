@@ -50,9 +50,13 @@ exports.getTileAt = (board, row, col) => board[exports.cellKey(row, col)];
 
 /**
  * Whether you can step from tile A to its neighbour in direction `dir`.
- * Both tiles must expose matching corridor exits. Locked doors block the edge.
- * `ignoreDoors` is used for the dragon (still blocked by walls, i.e. missing
- * corridors, but we keep doors blocking too as they are walls).
+ * Both tiles must expose matching corridor exits.
+ *
+ * Locked doors are ONE-WAY per the rules: a locked door only blocks LEAVING its
+ * own tile in the door's direction. You may always step ONTO a door tile (even a
+ * "back door" whose door faces you); you just cannot leave it through the door
+ * until it is picked. So we only block egress from `tile` when its own door faces
+ * `dir`; the neighbour's door never blocks entry.
  */
 exports.edgeConnected = (board, tile, dir) => {
     if (!tile || !tile.exits.includes(dir)) return false;
@@ -61,9 +65,8 @@ exports.edgeConnected = (board, tile, dir) => {
     if (!neighbour) return false;
     const back = Tiles.opposite(dir);
     if (!neighbour.exits.includes(back)) return false;
-    // Locked door on either side of the shared edge blocks passage.
+    // A locked door blocks leaving its own tile through that door edge.
     if (tile.doorLocked && tile.doorDir === dir) return false;
-    if (neighbour.doorLocked && neighbour.doorDir === back) return false;
     return true;
 };
 

@@ -1,5 +1,5 @@
 /**
- * "Événements fâcheux" (misfortune cards).
+ * Misfortune cards ("Événements fâcheux").
  *
  * 5 types x 5 cards = 25, plus 1 "x2" card per type = 5 => 30 cards total.
  *

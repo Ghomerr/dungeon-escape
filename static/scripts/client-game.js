@@ -23,7 +23,7 @@ const TILE_INFO = {
     'door-front': { icon: '🚪', label: 'Porte verrouillée (avant)', desc: 'Porte verrouillée vers l\'avant : impossible de découvrir / avancer au-delà tant qu\'elle est fermée.' },
     'door-back': { icon: '🚪', label: 'Porte verrouillée (arrière)', desc: 'Porte verrouillée vers l\'arrière : impossible de revenir en arrière tant qu\'elle est fermée.' },
     trap: { icon: '⚙️', label: 'Plaque piégée', desc: 'En y entrant : jet de talent, ou -1 PV en cas d\'échec.' },
-    flammable: { icon: '🪵', label: 'Inflammable', desc: 'Prend feu lors de l\'événement Incendie selon le jet de dé (valeurs affichées).' },
+    flammable: { icon: '🧨', label: 'Inflammable', desc: 'Prend feu lors de l\'événement Incendie selon le jet de dé (valeurs affichées).' },
     poisonable: { icon: '🤢', label: 'Nauséabonde', desc: 'Devient empoisonnée lors de l\'événement Poison (-2 PV), jusqu\'au prochain événement.' },
     gloom: { icon: '🌫️', label: 'Pénombre', desc: 'Devient Obscurité totale lors de l\'événement Obscurité.' },
     'dragon-lair': { icon: '🐲', label: 'Antre de dragon', desc: 'Un dragon peut surgir ici lors de l\'événement Dragon.' }
@@ -34,9 +34,9 @@ const STATE_INFO = {
     dark: { icon: '🌑', label: 'Obscurité totale', desc: 'Entrée uniquement via « Marcher dans l\'Obscurité » (2 PA).' }
 };
 
-// --- Tile art (PNG) : mapping tuile -> image + rotation ---------------------
-// Les images sont dessinees dans UNE orientation canonique ; on les fait pivoter
-// (0/90/180/270) cote CSS pour coller aux `exits` reels de la tuile.
+// --- Tile art (PNG): tile -> image + rotation mapping -----------------------
+// Images are drawn in ONE canonical orientation; we rotate them (0/90/180/270)
+// via CSS to match the tile's real `exits`.
 const ART_PATH = 'static/assets/tiles/';
 const TILE_ART = {
     'simple|deadend': ['dead-end-1', 'dead-end-2'],
@@ -56,7 +56,9 @@ const TILE_ART = {
     'start|cross': ['entrance'],
     'exit|deadend': ['exit']
 };
-// Exits (dirs) tels que dessines dans l'image de base, avant rotation.
+// Exits (dirs) as drawn in the base image, before rotation.
+// Every image of a given shape is drawn in the SAME canonical orientation
+// (elbows = NE, corridors = NS, T = ESW...), cf. tools/generate_tiles.py.
 const ART_BASE_EXITS = { deadend: [0], corridor: [0, 2], elbow: [0, 1], tee: [1, 2, 3], cross: [0, 1, 2, 3] };
 
 function artPick(list, uid) { const n = list.length; return list[(((uid || 0) % n) + n) % n]; }
@@ -94,8 +96,8 @@ function tileArt(t) {
     return { file: file, rot: rotToMatch(baseExits, t.exits) };
 }
 
-// --- Portraits d'aventuriers ------------------------------------------------
-// Les fichiers portent l'id du personnage : static/assets/adventurers/<id>.png
+// --- Adventurer portraits ---------------------------------------------------
+// Files are named after the character id: static/assets/adventurers/<id>.png
 function portraitUrl(id) { return 'static/assets/adventurers/' + id + '.png'; }
 
 const EVENT_INFO = {
@@ -109,12 +111,12 @@ const EVENT_INFO = {
 
 const ACTION_ICON = {
     discover: '🧱', explore: '🧭', move: '👣', run: '🏃', heal: '➕',
-    'walk-dark': '🌑', 'walk-bridge': '🌉', extinguish: '🧯', 'pick-lock': '🗝️', hide: '🫥'
+    'walk-dark': '🌑', 'walk-bridge': '🌉', extinguish: '🧯', 'pick-lock': '🗝️', hide: '🙈'
 };
 const ABILITY_ICON = {
     'flame-mastery': '🧯', 'apply-balm': '🌿', 'animal-celerity': '🐾', 'lockpicking': '🗝️',
     'slay-dragon': '⚔️', 'inspiration': '🎵', 'fireball': '💥', 'shadow-walk': '🌑',
-    'night-vision': '👁️', 'strategic-retreat': '🔄', 'stealth': '🫥', 'rock-memory': '🪨',
+    'night-vision': '👁️', 'strategic-retreat': '🔄', 'stealth': '🙈', 'rock-memory': '🪨',
     'fire-resist': '🔥', 'elven-agility': '🤸', 'luck': '🍀', 'sacrifice': '🛡️'
 };
 
@@ -129,12 +131,12 @@ const DUNGEON_ACTIONS = [
     { action: 'walk-dark', label: 'Marcher dans l\'Obscurité', cost: 2, mode: 'dir', tip: 'Seul moyen d\'entrer sur une tuile Obscurité totale.' },
     { action: 'walk-bridge', label: 'Marcher en équilibre', cost: 2, mode: 'dir', tip: 'Seul moyen d\'entrer sur un Pont suspendu.' },
     { action: 'extinguish', label: 'Éteindre un incendie', cost: 2, mode: 'dirHere', tip: 'Éteint le feu sur sa tuile ou une tuile adjacente.' },
-    { action: 'pick-lock', label: 'Crocheter une porte', cost: 2, mode: 'dirHere', tip: 'Ouvre une porte verrouillée (jet de talent ; le kit n\'est consommé qu\'en cas de réussite).' },
+    { action: 'pick-lock', label: 'Crocheter une porte', cost: 2, mode: 'none', tip: 'Ouvre la porte verrouillée de votre tuile (jet de talent ; le kit n\'est consommé qu\'en cas de réussite).' },
     { action: 'hide', label: 'Se cacher', cost: 2, mode: 'none', tip: 'Ne plus être ciblé par les dragons ce tour (jet de talent ; auto au 3e essai d\'affilée).' }
 ];
 const ABILITY_MODE = {
     'flame-mastery': 'dirHere', 'apply-balm': 'otherSameTile', 'animal-celerity': 'none',
-    'lockpicking': 'dirHere', 'slay-dragon': 'none', 'inspiration': 'otherAny',
+    'lockpicking': 'none', 'slay-dragon': 'none', 'inspiration': 'otherAny',
     'fireball': 'dir', 'shadow-walk': 'shadowDest'
 };
 
@@ -161,6 +163,11 @@ $(document).ready(() => {
         Socket.emit('player-disconnect', { userId: Player.id, roomId: Player.roomId, token: Player.token });
         window.location.href = '/';
     });
+
+    // Host-only : end a paused game right away.
+    $('#pause-end-btn').click(() => {
+        Socket.emit('end-game-early', { roomId: Player.roomId, ownerId: Player.id, token: Player.token });
+    });
 });
 
 window.addEventListener('beforeunload', () => {
@@ -169,10 +176,27 @@ window.addEventListener('beforeunload', () => {
 
 // --- Socket events ---------------------------------------------------------
 
-Socket.on('ready-players-amount', (d) => $('#waiting-text').text(d.readyPlayersAmout + ' / ' + d.totalPlayers + ' joueurs prêts…'));
+Socket.on('ready-players-amount', (d) => { $('#waiting-sub').hide(); $('#pause-end-btn').hide(); $('#waiting-text').text(d.readyPlayersAmout + ' / ' + d.totalPlayers + ' joueurs prêts…'); });
 Socket.on('all-players-ready-to-play', () => $('#waiting-overlay').fadeOut(300));
-Socket.on('player-left-the-room', (d) => { $('#waiting-overlay').fadeIn(150); $('#waiting-text').text('Un joueur s\'est déconnecté (' + d.missingPlayers + ' manquant(s))… Partie en pause.'); });
-Socket.on('in-game-player-connected', (d) => { if (d.missingPlayers === 0) $('#waiting-overlay').fadeOut(200); });
+
+function showPauseOverlay(d) {
+    const names = (d.missingNames && d.missingNames.length) ? d.missingNames.join(', ') : (d.missingPlayers + ' joueur(s)');
+    $('#waiting-text').text('⏸️ Partie en pause — en attente de : ' + names);
+    $('#waiting-sub').show();
+    $('#pause-end-btn').toggle(d.owner === Player.id);
+    $('#waiting-overlay').stop(true, true).fadeIn(150);
+}
+function hidePauseOverlay() { $('#pause-end-btn').hide(); $('#waiting-overlay').fadeOut(200); }
+
+Socket.on('player-left-the-room', (d) => showPauseOverlay(d));
+Socket.on('in-game-player-connected', (d) => { if (d.missingPlayers === 0) hidePauseOverlay(); else showPauseOverlay(d); });
+Socket.on('game-aborted', (d) => {
+    const msg = d && d.reason === 'host-ended'
+        ? 'L\'hôte a mis fin à la partie.'
+        : 'La partie a été fermée après une trop longue absence.';
+    Dialog.openSimpleDialog($('#simple-dialog'), '🏁 Partie terminée', msg);
+    setTimeout(() => { window.location.href = '/'; }, 1800);
+});
 Socket.on('join-game-error', () => { window.location.href = '/'; });
 
 Socket.on('game-error', (data) => {
@@ -184,11 +208,13 @@ Socket.on('game-error', (data) => {
         'need-bridge-action': 'Utilisez « Marcher en équilibre » pour un pont.', 'need-dark-action': 'Utilisez « Marcher dans l\'Obscurité ».',
         'fire-blocks': 'Un incendie bloque le passage (éteignez-le).', 'not-same-tile': 'La cible doit être sur la même tuile.',
         'full-hp': 'Cette cible a déjà tous ses PV.', 'not-on-fire': 'Cette tuile n\'est pas en feu.',
-        'no-door': 'Aucune porte verrouillée ici.', 'no-kits': 'Plus de kits de crochetage.',
+        'no-door': 'Aucune porte verrouillée sur votre tuile.', 'no-kits': 'Plus de kits de crochetage.',
         'no-adjacent-dragon': 'Aucun dragon adjacent.', 'no-fireball-left': 'Plus de boule de feu disponible.',
         'not-on-shadow': 'Vous devez être sur une tuile Pénombre / Obscurité.', 'bad-destination': 'Destination invalide.',
         'unconscious': 'Cet aventurier est inconscient.', 'finish-placement': 'Terminez d\'abord le placement de la tuile.',
-        'no-mulligan-left': 'Plus de Repli stratégique disponible.'
+        'no-mulligan-left': 'Plus de Repli stratégique disponible.',
+        'run-move-only': 'Pendant une course / célérité, seul le déplacement est possible.',
+        'nothing-to-cancel': 'Rien à annuler (le déplacement a déjà commencé).'
     };
     if (data.error && M[data.error]) Dialog.openSimpleDialog($('#simple-dialog'), '⛔ Action impossible', M[data.error]);
 });
@@ -298,35 +324,50 @@ function dirBetween(fromR, fromC, toR, toC) {
 function edgeConnected(fromTile, dir, toTile) {
     if (!fromTile || !toTile) return false;
     if (!fromTile.exits.includes(dir) || !toTile.exits.includes(OPP(dir))) return false;
+    // One-way doors: a locked door only blocks leaving its own tile through the
+    // door edge. You can always step onto a door tile (mirrors server edgeConnected).
     if (fromTile.doorLocked && fromTile.doorDir === dir) return false;
-    if (toTile.doorLocked && toTile.doorDir === OPP(dir)) return false;
     return true;
 }
 
 function tileFullLabel(tile) {
     const base = TILE_INFO[tile.kind] || { icon: '', label: tile.kind, desc: '' };
-    let txt = base.icon + ' ' + base.label;
-    if (tile.state && STATE_INFO[tile.state]) txt += ' — ' + STATE_INFO[tile.state].icon + ' ' + STATE_INFO[tile.state].label;
+    // When a tile suffers a bad state (fire, poison, darkness), that state takes
+    // priority in the title (e.g. "Obscurité totale" rather than "Pénombre").
+    const st = (tile.state && tile.state !== 'normal' && STATE_INFO[tile.state]) ? STATE_INFO[tile.state] : null;
+    let txt = st ? (st.icon + ' ' + st.label) : (base.icon + ' ' + base.label);
     if (tile.doorLocked) txt += ' 🔒 (verrouillée)';
-    let desc = base.desc;
-    if (tile.state && STATE_INFO[tile.state]) desc = STATE_INFO[tile.state].desc;
+    const desc = st ? st.desc : base.desc;
     return txt + '\n' + desc;
 }
 
+// Show the tile description in the permanent panel (above the action buttons).
+function showTileDesc(tile) {
+    const parts = tileFullLabel(tile).split('\n');
+    $('#tile-desc').removeClass('tile-desc-empty').html(
+        '<div class="td-title">' + escapeHtml(parts[0]) + '</div>' +
+        '<div class="td-body">' + escapeHtml(parts[1] || '') + '</div>');
+}
+
 function onTileClick(tile) {
-    if (!isMyTurn()) { Dialog.openSimpleDialog($('#simple-dialog'), tileFullLabel(tile).split('\n')[0], tileFullLabel(tile).split('\n')[1]); return; }
+    showTileDesc(tile);
+    if (!isMyTurn()) return;
     const ac = activeChar();
     if (!ac || !ac.conscious) return;
     const dir = dirBetween(ac.row, ac.col, tile.row, tile.col);
     const here = tileAt(ac.row, ac.col);
     const items = [];
 
+    // A locked door is always picked from the tile you stand on (any direction).
+    const canPickHere = here.doorLocked;
+
     if (dir === 'here') {
         if (tile.state === 'fire') items.push({ label: '🧯 Éteindre l\'incendie (2 PA)', fn: () => sendAction('extinguish', {}) });
-        // info as fallback
+        if (canPickHere) items.push({ label: '🗝️ Crocheter la porte (2 PA)', fn: () => sendAction('pick-lock', {}) });
     } else if (dir !== null) {
         const connected = edgeConnected(here, dir, tile);
-        const door = (here.doorLocked && here.doorDir === dir) || (tile.doorLocked && tile.doorDir === OPP(dir));
+        // Our own door blocks leaving this way : offer to pick it (from here).
+        const blockedByOwnDoor = here.doorLocked && here.doorDir === dir;
         const sameAxisExit = here.exits.includes(dir) && tile.exits.includes(OPP(dir));
 
         if (tile.state === 'fire') {
@@ -340,12 +381,12 @@ function onTileClick(tile) {
         } else if (connected) {
             items.push({ label: '👣 Se déplacer ici (1 PA)', fn: () => sendAction('move', { dir }) });
         }
-        if (door) items.push({ label: '🗝️ Crocheter la porte (2 PA)', fn: () => sendAction('pick-lock', { dir }) });
+        if (blockedByOwnDoor) items.push({ label: '🗝️ Crocheter la porte qui bloque ce passage (2 PA)', fn: () => sendAction('pick-lock', {}) });
     }
 
-    const parts = tileFullLabel(tile).split('\n');
-    items.push({ label: 'ℹ️ ' + parts[0], fn: () => Dialog.openSimpleDialog($('#simple-dialog'), parts[0], parts[1]) });
-
+    // The description is already shown permanently (#tile-desc panel), so the
+    // menu only contains actions.
+    if (!items.length) return;
     if (items.length === 1) { items[0].fn(); return; }
     openMenu('Tuile ' + (TILE_INFO[tile.kind] || {}).label, items);
 }
@@ -362,7 +403,38 @@ function onGhostClick(row, col, dir) {
 
 // --- Rendering -------------------------------------------------------------
 
+// Ambient colour of each event (for the central toast).
+const EVENT_COLORS = {
+    fire: '#b83a1c', curse: '#6c3fb5', poison: '#4c8f2a',
+    dragon: '#8b1a1a', gloom: '#2a2f6b', 'sudden-death': '#1a1a1a'
+};
+
+// Large central toast shown when a bad event occurs.
+function showEventToast(ev) {
+    const info = EVENT_INFO[ev.type] || { icon: '🎴' };
+    const $t = $('#event-toast');
+    $t[0].style.setProperty('--toast-color', EVENT_COLORS[ev.type] || '#333');
+    $t.html('<span class="toast-icon">' + info.icon + '</span><span class="toast-label">' +
+        escapeHtml(ev.label || '') + '</span>');
+    $t.stop(true, true).css({ display: 'flex', opacity: 0 }).animate({ opacity: 1 }, 220);
+    clearTimeout(Game._toastTimer);
+    Game._toastTimer = setTimeout(() => $t.animate({ opacity: 0 }, 500, () => $t.css('display', 'none')), 3200);
+}
+
+function maybeShowEventToast(state) {
+    const n = state.eventsResolved || 0;
+    if (Game._lastEvents === undefined) { Game._lastEvents = n; Game._sudden = state.suddenDeath; return; }
+    if (n > Game._lastEvents && state.currentEvent) {
+        showEventToast(state.currentEvent);
+    } else if (state.suddenDeath && !Game._sudden) {
+        showEventToast({ type: 'sudden-death', label: 'Mort subite' });
+    }
+    Game._lastEvents = n;
+    Game._sudden = state.suddenDeath;
+}
+
 function render(state) {
+    maybeShowEventToast(state);
     if (state.status !== 'PLAYING') renderEnd(state);
     renderHeader(state);
     renderParty(state);
@@ -382,6 +454,12 @@ function renderHeader(state) {
         info += ' · À ' + (ac.ownerId === Player.id ? 'VOUS' : ac.ownerId) + ' : ' + ac.emoji + ' ' + ac.name +
             ' — ' + state.ap + ' PA' + (state.freeMoves ? ' (+' + state.freeMoves + ' dépl.)' : '');
         if (state.interrupt) info += ' ⚡ action immédiate';
+        if (state.turnTotal) {
+            const pos = state.turnTotal - state.turnRemaining + 1;
+            const left = state.turnRemaining - 1; // adventurers still waiting after the active one
+            info += ' · Aventurier ' + pos + '/' + state.turnTotal +
+                (left > 0 ? ' (' + left + ' après lui)' : ' (dernier du tour)');
+        }
     }
     $('#turn-info').text(info);
     if (state.suddenDeath) $('#turns-left').html('<span class="sudden">💀 MORT SUBITE</span>');
@@ -425,16 +503,43 @@ function renderLog(state) {
 }
 function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+// Slide a token from its previous cell to its new one (~1s) so the move is
+// visible. `key` identifies the token (character or dragon).
+function animateIfMoved($tok, $tile, key, row, col, prevPos, curPos) {
+    curPos[key] = { row, col };
+    const prev = prevPos[key];
+    if (!prev || (prev.row === row && prev.col === col)) return;
+    const dr = prev.row - row, dc = prev.col - col;
+    const el = $tok[0], tileEl = $tile[0];
+    // Start from the previous cell; let the token overflow the tile during the slide.
+    el.style.transition = 'none';
+    el.style.transform = 'translate(' + (dc * CELL) + 'px,' + (dr * CELL) + 'px)';
+    el.style.zIndex = '30';
+    tileEl.style.overflow = 'visible';
+    tileEl.style.zIndex = '20';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        el.style.transition = 'transform 1s ease';
+        el.style.transform = 'translate(0,0)';
+    }));
+    setTimeout(() => {
+        el.style.transition = ''; el.style.transform = ''; el.style.zIndex = '';
+        tileEl.style.overflow = ''; tileEl.style.zIndex = '';
+    }, 1100);
+}
+
 function renderBoard(state) {
     const board = state.board;
     const keys = Object.keys(board);
+    const prevPos = Game._tokenPos || {};
+    const curPos = {};
     let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
     keys.forEach(k => { const t = board[k]; minR = Math.min(minR, t.row); maxR = Math.max(maxR, t.row); minC = Math.min(minC, t.col); maxC = Math.max(maxC, t.col); });
 
     // Ghost (discoverable) cells around the active character's tile.
     const ghosts = [];
     const ac = activeChar();
-    if (ac && isMyTurn() && ac.conscious && !state.pending) {
+    // No discovery/exploration ghosts while running (only movement is allowed then).
+    if (ac && isMyTurn() && ac.conscious && !state.pending && !(state.freeMoves > 0)) {
         const here = board[cellKey(ac.row, ac.col)];
         if (here) {
             for (let dir = 0; dir < 4; dir++) {
@@ -459,29 +564,35 @@ function renderBoard(state) {
             .css({ top: (t.row - minR) * CELL + 'px', left: (t.col - minC) * CELL + 'px', width: CELL + 'px', height: CELL + 'px' })
             .attr('title', tileFullLabel(t));
 
-        // Couche image (pivotee) : le PNG porte sol, murs, connecteurs et decor.
+        // Image layer (rotated): the PNG carries floor, walls, connectors and decor.
         const art = tileArt(t);
         $tile.append($('<div class="tile-art"></div>').css({
             'background-image': 'url(' + ART_PATH + art.file + '.png)',
             'transform': 'rotate(' + (art.rot * 90) + 'deg)'
         }));
 
-        // Calque d'etat (evenement facheux) : voile colore + icone, par-dessus l'image.
+        // State layer (bad event): coloured veil + icon, on top of the image.
         if (t.state && t.state !== 'normal' && STATE_INFO[t.state]) {
             $tile.append('<div class="state-fx fx-' + t.state + '"></div>');
             $tile.append('<div class="state-icon">' + STATE_INFO[t.state].icon + '</div>');
         }
 
-        // Valeurs de des (inflammable) : overlay HTML toujours droit et lisible.
+        // Dice values (flammable): HTML overlay, always upright and legible.
         if (t.kind === 'flammable' && t.fireValues) {
             $tile.append('<div class="fire-values">' + t.fireValues.join('·') + '</div>');
         }
 
-        state.dragons.filter(d => d.row === t.row && d.col === t.col).forEach(() => $tile.append('<span class="token dragon-token">🐉</span>'));
+        state.dragons.filter(d => d.row === t.row && d.col === t.col).forEach(d => {
+            const $tok = $('<span class="token dragon-token">🐉</span>');
+            $tile.append($tok);
+            animateIfMoved($tok, $tile, 'd' + d.id, d.row, d.col, prevPos, curPos);
+        });
         state.characters.filter(c => !c.escaped && !c.dead && c.row === t.row && c.col === t.col).forEach(c => {
             const koCls = c.conscious ? '' : ' ko';
             const activeCls = c.id === state.activeId ? ' tok-active' : '';
-            $tile.append('<span class="token char-token' + koCls + activeCls + '" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '" title="' + c.name + ' (' + c.hp + '/' + c.maxHp + ')"></span>');
+            const $tok = $('<span class="token char-token' + koCls + activeCls + '" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '" title="' + c.name + ' (' + c.hp + '/' + c.maxHp + ')"></span>');
+            $tile.append($tok);
+            animateIfMoved($tok, $tile, 'c' + c.id, c.row, c.col, prevPos, curPos);
         });
 
         $tile.click(() => onTileClick(t));
@@ -495,6 +606,8 @@ function renderBoard(state) {
         $gh.click(() => onGhostClick(g.row, g.col, g.dir));
         $board.append($gh);
     });
+
+    Game._tokenPos = curPos;
 }
 
 function miniTilePreview(cand, exits) {
@@ -552,9 +665,11 @@ function renderActions(state) {
     const ap = state.ap, freeMoves = state.freeMoves;
     const blockedByPending = !!state.pending;
 
+    // During a Run / Animal Celerity, only movement (and cancel) is allowed.
+    const running = freeMoves > 0;
     const enabledFor = (def) => {
         if (!my || !ac || !ac.conscious || blockedByPending) return false;
-        if (def.action === 'move' && freeMoves > 0) return true;
+        if (running) return def.action === 'move';
         return ap >= def.cost;
     };
     const buildBtn = (def, isAbility) => {
@@ -566,9 +681,21 @@ function renderActions(state) {
         if (enabledFor(def)) $b.click(() => runActionMode(def.mode, def, isAbility));
         return $b;
     };
+    // Cancel button shown in place of the Run / Celerity button until a move starts.
+    const buildCancelBtn = (label) => {
+        const $b = $('<button class="action-btn cancel-run-btn"><span class="act-ico">↩️</span><span class="act-lbl">' +
+            label + '</span><span class="ap-cost"></span></button>');
+        const enabled = my && !blockedByPending && !!state.cancelRunKind;
+        $b.prop('disabled', !enabled);
+        if (enabled) $b.click(() => sendAction('cancel-run', {}));
+        return $b;
+    };
 
     const $base = $('#base-actions').empty();
-    BASE_ACTIONS.forEach(def => $base.append(buildBtn(def, false)));
+    BASE_ACTIONS.forEach(def => {
+        if (def.action === 'run' && state.cancelRunKind === 'run') { $base.append(buildCancelBtn('Annuler la course')); return; }
+        $base.append(buildBtn(def, false));
+    });
     const $dung = $('#dungeon-actions').empty();
     DUNGEON_ACTIONS.forEach(def => $dung.append(buildBtn(def, false)));
 
@@ -576,6 +703,7 @@ function renderActions(state) {
     $('#active-char-name').text(ac ? '— ' + ac.name : '');
     if (ac) {
         ac.abilities.filter(a => !a.passive).forEach(a => {
+            if (a.id === 'animal-celerity' && state.cancelRunKind === 'animal-celerity') { $abil.append(buildCancelBtn('Annuler la célérité')); return; }
             const def = { action: 'ability', abilityId: a.id, label: a.name, cost: a.cost, mode: ABILITY_MODE[a.id] || 'none', tip: a.description };
             const $b = buildBtn(def, true);
             if (a.id === 'fireball' && ac.uses && ac.uses.fireball >= 3) $b.prop('disabled', true);
@@ -603,6 +731,7 @@ function renderActions(state) {
     // Board hint
     if (blockedByPending && state.pending.ownerId !== Player.id) $('#board-hint').text('Un joueur place une tuile…');
     else if (blockedByPending) $('#board-hint').text('Choisissez l\'orientation de la tuile dans la fenêtre.');
+    else if (my && ac && ac.conscious && running) $('#board-hint').text('Déplacement en cours (' + freeMoves + ' restant' + (freeMoves > 1 ? 's' : '') + ') : cliquez une tuile adjacente. Seul le déplacement est possible.');
     else if (my && ac && ac.conscious) $('#board-hint').text('Cliquez une tuile adjacente pour agir, ou un emplacement « + » pour explorer/découvrir.');
     else $('#board-hint').text('En attente du tour des autres joueurs…');
 }

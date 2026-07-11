@@ -132,7 +132,7 @@ const FAMILIES = [
     // --- Nauseous / poisonable (6 elbow + 2 tee = 8) ---
     { kind: 'poisonable', shape: 'elbow', count: 6 },
     { kind: 'poisonable', shape: 'tee', count: 2 },
-    // --- Gloom / pénombre (4 corridor + 2 tee + 2 cross = 8) ---
+    // --- Gloom / penumbra (4 corridor + 2 tee + 2 cross = 8) ---
     { kind: 'gloom', shape: 'corridor', count: 4 },
     { kind: 'gloom', shape: 'tee', count: 2 },
     { kind: 'gloom', shape: 'cross', count: 2 },

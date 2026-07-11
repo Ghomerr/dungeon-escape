@@ -15,6 +15,9 @@ const PACKAGE = require('./package.json');
 const SERVER_PORT = 8182;
 const MAX_ROOMS = 10;
 const MAX_PLAYERS = 6;
+// How long a game stays paused (players missing, or everyone gone) before it is
+// ended for good and the room is destroyed. Overridable via env for testing.
+const PAUSE_TIMEOUT_MS = parseInt(process.env.PAUSE_TIMEOUT_MS, 10) || 5 * 60 * 1000;
 const STATUS = {
     // shared with client.js !
     NOT_CONNECTED: 'NOT_CONNECTED',
@@ -84,6 +87,41 @@ function emitPlayerListChanged(room) {
 
 function emitGameState(room) {
     io.to(room.id).emit('game-state', Game.buildState(room));
+}
+
+// --- Pause / reconnection / room lifecycle ---------------------------------
+
+function countMissing(room) {
+    return room.users.filter(u => u.isConnected === false).length;
+}
+
+function startPauseTimer(room) {
+    if (room.pauseTimeout) return;
+    room.pauseTimeout = setTimeout(() => endGameByTimeout(room.id), PAUSE_TIMEOUT_MS);
+}
+
+function clearPauseTimer(room) {
+    if (room.pauseTimeout) {
+        clearTimeout(room.pauseTimeout);
+        room.pauseTimeout = null;
+    }
+}
+
+function destroyRoom(roomId) {
+    const room = ROOMS[roomId];
+    if (!room) return;
+    clearPauseTimer(room);
+    delete ROOMS[roomId];
+    refreshAllRoomsStatus();
+}
+
+// Called when the game is paused too long (missing players never come back, or
+// everyone left). Ends the game for good and destroys the room.
+function endGameByTimeout(roomId) {
+    const room = ROOMS[roomId];
+    if (!room) return;
+    io.to(roomId).emit('game-aborted', { reason: 'timeout' });
+    destroyRoom(roomId);
 }
 
 function logDebug(...message) {
@@ -265,9 +303,17 @@ io.on('connection', (Socket) => {
                 emitGameState(room);
             }
         } else if (room.status === STATUS.IN_GAME_MISSING_PLAYERS) {
-            room.missingPlayers = Math.max(0, room.missingPlayers - 1);
-            if (room.missingPlayers === 0) room.status = STATUS.IN_GAME;
-            io.to(room.id).emit('in-game-player-connected', { playerId: player.id, status: room.status, missingPlayers: room.missingPlayers });
+            // A player returned (same id + token) : resume once everyone is back.
+            room.missingPlayers = countMissing(room);
+            if (room.missingPlayers === 0) {
+                room.status = STATUS.IN_GAME;
+                clearPauseTimer(room);
+            }
+            io.to(room.id).emit('in-game-player-connected', {
+                playerId: player.id, owner: room.owner,
+                status: room.status, missingPlayers: room.missingPlayers,
+                missingNames: room.users.filter(u => !u.isConnected).map(u => u.id)
+            });
             emitGameState(room);
         } else if (room.status === STATUS.IN_GAME) {
             emitGameState(room);
@@ -278,6 +324,8 @@ io.on('connection', (Socket) => {
     Socket.on('game-action', (data) => {
         const room = ROOMS[data.roomId];
         if (!room || !room.game) return;
+        // No actions while the game is paused (a player is missing).
+        if (room.status !== STATUS.IN_GAME) return;
         const player = Utils.findUserByIdAndToken(room.users, data.userId, data.token);
         if (!player) return;
         const res = Game.applyAction(room, data.userId, data.action, data.payload);
@@ -290,6 +338,15 @@ io.on('connection', (Socket) => {
     Socket.on('request-game-state', (data) => {
         const room = ROOMS[data.roomId];
         if (room && room.game) emitGameState(room);
+    });
+
+    // The host may end a paused (or running) game early : everyone is expelled.
+    Socket.on('end-game-early', (data) => {
+        requireOwner(data, (room) => {
+            if (room.status !== STATUS.IN_GAME && room.status !== STATUS.IN_GAME_MISSING_PLAYERS) return;
+            io.to(room.id).emit('game-aborted', { reason: 'host-ended' });
+            destroyRoom(room.id);
+        });
     });
 
     // --- Disconnect ---------------------------------------------------------
@@ -339,14 +396,17 @@ function handleDisconnect(data, Socket) {
         case STATUS.IN_GAME:
         case STATUS.IN_GAME_MISSING_PLAYERS:
             player.isConnected = false;
-            room.status = STATUS.IN_GAME_MISSING_PLAYERS;
-            room.missingPlayers++;
-            if (room.missingPlayers < room.users.length) {
+            room.missingPlayers = countMissing(room);
+            if (room.missingPlayers > 0) {
+                // Pause the game and keep the room alive (even if EVERYONE left):
+                // it only ends after PAUSE_TIMEOUT_MS, or resumes if players return.
+                room.status = STATUS.IN_GAME_MISSING_PLAYERS;
+                startPauseTimer(room);
                 io.to(data.roomId).emit('player-left-the-room', {
-                    playerId: player.id, status: room.status, missingPlayers: room.missingPlayers
+                    playerId: player.id, owner: room.owner,
+                    status: room.status, missingPlayers: room.missingPlayers,
+                    missingNames: room.users.filter(u => !u.isConnected).map(u => u.id)
                 });
-            } else {
-                delete ROOMS[data.roomId];
             }
             break;
     }
