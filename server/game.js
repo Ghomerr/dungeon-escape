@@ -485,7 +485,7 @@ function beginPlacement(mode) {
         if (dir === undefined || dir === null) return { ok: false, error: 'no-direction' };
 
         const here = tileAt(g, char.row, char.col);
-        if (!here.exits.includes(dir)) return { ok: false, error: 'no-exit-here' };
+        if (!Utils.tileOpensToward(here, dir)) return { ok: false, error: 'no-exit-here' };
         if (here.doorLocked && here.doorDir === dir) return { ok: false, error: 'door-blocks' };
 
         const d = Tiles.DELTA[dir];
@@ -524,7 +524,7 @@ function orientationsForPlacement(g, shape, nr, nc, dir) {
     const neighbourOpens = {};
     for (let d = 0; d < 4; d++) {
         const nb = tileAt(g, nr + Tiles.DELTA[d].row, nc + Tiles.DELTA[d].col);
-        if (nb) neighbourOpens[d] = nb.exits.includes(Tiles.opposite(d));
+        if (nb) neighbourOpens[d] = Utils.tileOpensToward(nb, Tiles.opposite(d));
     }
     const seen = {};
     const out = [];
@@ -822,21 +822,31 @@ function doAbility(room, char, payload) {
             const here = tileAt(g, char.row, char.col);
             spendAp(g, 2);
             char.uses.fireball++;
-            // Blast a wall : open an exit in that direction (and on the neighbour if any).
-            if (!here.exits.includes(dir)) here.exits.push(dir);
+            // Blast a wall : record a "breach" opening in that direction (and on the
+            // neighbour if any). Breaches are kept SEPARATE from `exits` so the tile
+            // art never rotates; the client draws a breach overlay on top instead.
+            if (!here.exits.includes(dir)) {
+                here.breaches = here.breaches || [];
+                if (!here.breaches.includes(dir)) here.breaches.push(dir);
+            }
             here.doorLocked = false;
             const d = Tiles.DELTA[dir];
             const neighbour = tileAt(g, char.row + d.row, char.col + d.col);
             if (neighbour) {
                 const back = Tiles.opposite(dir);
-                if (!neighbour.exits.includes(back)) neighbour.exits.push(back);
+                if (!neighbour.exits.includes(back)) {
+                    neighbour.breaches = neighbour.breaches || [];
+                    if (!neighbour.breaches.includes(back)) neighbour.breaches.push(back);
+                }
             }
             pushLog(room, '💥 ' + char.name + ' lance une Boule de feu et perce une paroi (' + char.uses.fireball + '/' + FIREBALL_USES + ') !');
-            // Triggers an immediate misfortune event.
+            // The blast triggers an immediate Fire event ("Éboulement" in the old
+            // rules). It consumes one card from the timed deck (advancing the doom
+            // clock like a regular event) but always resolves as an Incendie.
             const card = g.eventDeck.length ? g.eventDeck.shift() : null;
             if (card) {
                 g.eventsResolved++;
-                resolveEvent(room, card);
+                resolveEvent(room, { type: 'fire', label: Events.LABELS.fire, doubled: false });
             } else {
                 pushLog(room, '⏳ Plus d\'événement à déclencher (mort subite).');
             }
@@ -938,7 +948,9 @@ function moveOneDragon(room, dragon) {
     const g = room.game;
     const { target, distance } = nearestTarget(g, dragon);
     if (!target || distance > DRAGON_RANGE) {
-        // No reachable adventurer within range : the dragon vanishes.
+        // No targetable victim — whether because it is out of range or simply
+        // hidden — so the dragon vanishes (it may come back later). A dragon
+        // either has a victim and advances, or disappears; it never lingers.
         dragon.remove = true;
         pushLog(room, '🐉 Un Dragon ne trouve plus de proie et disparaît.');
         return;

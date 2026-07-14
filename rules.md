@@ -202,6 +202,9 @@ Le premier joueur passe le marqueur "Premier joueur" au joueur situé dans le se
 # Tuiles du Donjon
 La plupart des tuiles du **Donjon** sont innofensives, tandis que d'autres sont dangereuses ou sont difficiles à traverser. Elles sont révélées lors des actions **Découvrir le Donjon** et **Explorer le Donjon**. Elles sont toujours orientées de sorte à connecter les couloirs des tuiles adjacentes entre elles.
 
+## Règle de défausse lors de la pose
+Dans le cas « très peu probable » où le placement d'une tuile ferait en sorte que la caverne n'ait plus aucun côté libre permettant de continuer l'exploration (via les actions **Découvrir le Donjon** ou **Explorer le Donjon**), vous devez défausser cette tuile et placer la tuile suivante de la pile à la place.
+
 ## Tuile Départ (x1)
 Les aventuriers commencent sur cette première tuile placée dès le début de la partie au centre de la table de jeu.
 
@@ -241,6 +244,9 @@ Lorsqu'un aventurier entre sur cette tuile, il doit immédiatement réussir un *
 
 ## Boules de feu (x3)
 Le **Pyromancien** a la capacité d'utiliser jusqu'à 3 **boules de feu** afin de créer une ouverture vers une tuile adjacente, permettant de connecter 2 tuiles entre elles. Si la paroie sur laquelle une **boule de feu** est utilisée sans tuile adjacente, il sera possible d'**explorer** ou de **découvrir** une nouvelle tuile et de la placer à cet emplacement. L'ouverture créée ainsi reste disponible jusqu'à la fin de la partie.
+
+### Utilisation des boules de feu
+Si vous jouez avec le **Pyromancien**, celui-ci possède une capacité spéciale appelée « **Boule de feu** ». Il peut utiliser cette capacité sur une paroi pour créer un passage vers une tuile adjacente. Il est précisé qu'il peut utiliser cette capacité sur une paroi qui ne donne actuellement sur aucune tuile, ce qui permet ensuite de **Découvrir** ou d'**Explorer** une nouvelle tuile à travers cette ouverture. Attention toutefois, cette capacité n'est utilisable que trois fois par partie et déclenche immédiatement un événement **Incendie** (anciennement appelé « **Éboulement** »).
 
 # Dragons
 Les **Dragons** apparaissent dans le **Donjon** à l'issue de l'**événement fâcheux** "**Dragon**" sur les tuiles **Antre de dragon**. Chaque **Dragon** se déplace pendant la phase **Dragon**, vers l'**aventurier** le plus proche.
@@ -299,7 +305,7 @@ Il existe 8 aventuriers différents proposés pour explorer le **Donjon**. Ils p
 ## Pyromancien
 * 3 points de vie
 * Niveau 4
-* **Boule de feu** (2 PA) : jusqu'à 3 fois par partie, donne la possibilité de détruire une paroie du Donjon. Cela déclenche immédiatement un **événement fâcheux** à résoudre dans les conditions habituelles.
+* **Boule de feu** (2 PA) : jusqu'à 3 fois par partie, donne la possibilité de détruire une paroie du Donjon. Cela déclenche immédiatement un **événement Incendie** à résoudre dans les conditions habituelles.
 * **Résistance aux flammes** (Passif) : les tuiles **Incendies** ne font perdre qu'un seul point de vie (au lieu de 3 aux autres aventuriers).
 
 ## Elfe Roublard

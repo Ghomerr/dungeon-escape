@@ -74,7 +74,7 @@ const CHARACTERS = [
             fireball: true            // 3 fireballs per game
         },
         abilities: [
-            { id: 'fireball', name: 'Boule de feu', cost: 2, passive: false, description: 'Jusqu\'à 3 fois : détruit une paroi pour ouvrir un passage. Déclenche immédiatement un événement fâcheux.' },
+            { id: 'fireball', name: 'Boule de feu', cost: 2, passive: false, description: 'Jusqu\'à 3 fois : détruit une paroi pour ouvrir un passage. Déclenche immédiatement un Incendie.' },
             { id: 'fire-resist', name: 'Résistance aux flammes', cost: 0, passive: true, description: 'Les tuiles Incendie ne font perdre qu\'1 PV (au lieu de 3).' }
         ]
     },

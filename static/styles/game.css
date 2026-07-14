@@ -109,6 +109,15 @@ body.in-game { overflow: hidden; }
 .pc-emoji { font-size: 1.2rem; }
 .pc-name { font-weight: bold; color: var(--gold-light); flex: 1; }
 .pc-hp { font-size: .8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+/* Small level badge (dragons target the lowest level first). */
+.pc-level {
+    font-size: .66rem; font-weight: bold; color: var(--gold);
+    background: #0003; border: 1px solid var(--border);
+    border-radius: 8px; padding: 0 6px; white-space: nowrap;
+}
+/* Action points of the active adventurer, shown like the HP line. */
+.pc-ap { font-size: .8rem; color: var(--gold-light); font-weight: bold; margin-top: 3px; }
+.pc-ap .pc-free { color: var(--muted); font-weight: normal; }
 .pc-owner { font-size: .72rem; color: var(--muted); margin-top: 2px; }
 .hp-bar { flex: 1; height: 7px; background: #3a1a14; border-radius: 4px; overflow: hidden; }
 .hp-fill { height: 100%; background: linear-gradient(to right, #4f8f4a, #84c46f); }
@@ -161,6 +170,13 @@ body.in-game { overflow: hidden; }
 /* tile image (floor/walls/connectors/decor), rotated to match the exits */
 .tile-art {
     position: absolute; inset: 0; z-index: 0;
+    background-size: 100% 100%; background-repeat: no-repeat;
+    transform-origin: center center;
+    pointer-events: none;
+}
+/* fireball breach overlay: sits above the base art, below the event veil */
+.tile-breach {
+    position: absolute; inset: 0; z-index: 2;
     background-size: 100% 100%; background-repeat: no-repeat;
     transform-origin: center center;
     pointer-events: none;
@@ -243,7 +259,10 @@ body.in-game { overflow: hidden; }
     background-size: cover; background-position: center;
 }
 .char-token.ko { filter: grayscale(1) brightness(.7); }
-/* Active adventurer: radiating white aura (like the dragon, in white). */
+/* Active adventurer: radiating aura that mirrors the remaining action points.
+   - White + blinking while action points remain.
+   - Steady (no blink) once action points reach zero.
+   - Red (overreach) after an Effort : blinks while AP remain, steady at zero. */
 .char-token.tok-active {
     border-color: #fff;
     z-index: 7;
@@ -252,6 +271,24 @@ body.in-game { overflow: hidden; }
 @keyframes aura-white {
     0%, 100% { box-shadow: 0 0 0 2px #fff, 0 0 6px 2px #ffffffaa; }
     50% { box-shadow: 0 0 0 2px #fff, 0 0 16px 6px #ffffffee; }
+}
+/* No more action points : stop blinking, keep a steady glow. */
+.char-token.tok-active.aura-empty {
+    animation: none;
+    box-shadow: 0 0 0 2px #fff, 0 0 10px 3px #ffffffcc;
+}
+/* Overreach (Effort used) : the aura turns red. */
+.char-token.tok-active.aura-overreach {
+    border-color: #ff6a4c;
+    animation-name: aura-red;
+}
+.char-token.tok-active.aura-overreach.aura-empty {
+    animation: none;
+    box-shadow: 0 0 0 2px #ff3b1f, 0 0 16px 6px #ff3b1fee;
+}
+@keyframes aura-red {
+    0%, 100% { box-shadow: 0 0 0 2px #ff3b1f, 0 0 6px 2px #ff3b1faa; }
+    50% { box-shadow: 0 0 0 2px #ff3b1f, 0 0 16px 6px #ff3b1fee; }
 }
 .dragon-token { background: #5a1d12; font-size: 1.1rem; width: 30px; height: 30px; animation: pulse 1.4s infinite; }
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 4px #ff3b1f; } 50% { box-shadow: 0 0 12px #ff3b1f; } }
@@ -311,7 +348,7 @@ body.in-game { overflow: hidden; }
 .placement-candidate { border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-bottom: 8px; background: var(--panel2); }
 .cand-title { font-weight: bold; color: var(--gold-light); margin-bottom: 8px; }
 .orient-options { display: flex; gap: 8px; flex-wrap: wrap; }
-.orient-btn { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; }
+.orient-btn { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px; padding: 6px; width: 88px; height: 92px; box-sizing: border-box; }
 .orient-label { font-size: .72rem; color: var(--muted); }
 .mini-tile { position: relative; width: 54px; height: 54px; background: #2c2419; border: 1px solid #0007; overflow: hidden; }
 .mini-art {

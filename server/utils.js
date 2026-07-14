@@ -58,13 +58,24 @@ exports.getTileAt = (board, row, col) => board[exports.cellKey(row, col)];
  * until it is picked. So we only block egress from `tile` when its own door faces
  * `dir`; the neighbour's door never blocks entry.
  */
+/**
+ * Whether a tile has a corridor opening toward `dir` — either a native exit or a
+ * breach blasted open by the Pyromancer's fireball. Breaches are kept separate
+ * from `exits` so the tile's artwork never rotates when a wall is opened.
+ */
+exports.tileOpensToward = (tile, dir) => {
+    if (!tile) return false;
+    if (tile.exits.includes(dir)) return true;
+    return !!(tile.breaches && tile.breaches.includes(dir));
+};
+
 exports.edgeConnected = (board, tile, dir) => {
-    if (!tile || !tile.exits.includes(dir)) return false;
+    if (!exports.tileOpensToward(tile, dir)) return false;
     const d = Tiles.DELTA[dir];
     const neighbour = exports.getTileAt(board, tile.row + d.row, tile.col + d.col);
     if (!neighbour) return false;
     const back = Tiles.opposite(dir);
-    if (!neighbour.exits.includes(back)) return false;
+    if (!exports.tileOpensToward(neighbour, back)) return false;
     // A locked door blocks leaving its own tile through that door edge.
     if (tile.doorLocked && tile.doorDir === dir) return false;
     return true;

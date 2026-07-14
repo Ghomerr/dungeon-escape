@@ -13,6 +13,14 @@ Player.token = params.get('formToken');
 const OPP = (d) => (d + 2) % 4;
 const DELTA = { 0: { r: -1, c: 0 }, 1: { r: 0, c: 1 }, 2: { r: 1, c: 0 }, 3: { r: 0, c: -1 } };
 
+// A tile opens toward `dir` via a native exit OR a fireball breach. Breaches are
+// stored apart from `exits` so the tile art never rotates when a wall is opened.
+function tileOpensToward(tile, dir) {
+    if (!tile) return false;
+    if (tile.exits.includes(dir)) return true;
+    return !!(tile.breaches && tile.breaches.includes(dir));
+}
+
 // --- Reference data --------------------------------------------------------
 
 const TILE_INFO = {
@@ -282,6 +290,8 @@ function runActionMode(mode, def, isAbility) {
         case 'sameTile': {
             const cands = Game.state.characters.filter(c => !c.escaped && !c.dead && c.row === ac.row && c.col === ac.col);
             if (!cands.length) return;
+            // Alone on the tile : heal oneself immediately, no target menu.
+            if (cands.length === 1) { emit({ targetId: cands[0].id }); return; }
             openMenu('Soigner qui ?', cands.map(c => ({ label: c.emoji + ' ' + c.name + ' (' + c.hp + '/' + c.maxHp + ')', fn: () => emit({ targetId: c.id }) })));
             break;
         }
@@ -323,7 +333,7 @@ function dirBetween(fromR, fromC, toR, toC) {
 
 function edgeConnected(fromTile, dir, toTile) {
     if (!fromTile || !toTile) return false;
-    if (!fromTile.exits.includes(dir) || !toTile.exits.includes(OPP(dir))) return false;
+    if (!tileOpensToward(fromTile, dir) || !tileOpensToward(toTile, OPP(dir))) return false;
     // One-way doors: a locked door only blocks leaving its own tile through the
     // door edge. You can always step onto a door tile (mirrors server edgeConnected).
     if (fromTile.doorLocked && fromTile.doorDir === dir) return false;
@@ -368,7 +378,7 @@ function onTileClick(tile) {
         const connected = edgeConnected(here, dir, tile);
         // Our own door blocks leaving this way : offer to pick it (from here).
         const blockedByOwnDoor = here.doorLocked && here.doorDir === dir;
-        const sameAxisExit = here.exits.includes(dir) && tile.exits.includes(OPP(dir));
+        const sameAxisExit = tileOpensToward(here, dir) && tileOpensToward(tile, OPP(dir));
 
         if (tile.state === 'fire') {
             items.push({ label: '🧯 Éteindre l\'incendie (2 PA)', fn: () => sendAction('extinguish', { dir }) });
@@ -451,7 +461,7 @@ function renderHeader(state) {
     const ac = activeChar();
     let info = 'Tour ' + state.round;
     if (ac) {
-        info += ' · À ' + (ac.ownerId === Player.id ? 'VOUS' : ac.ownerId) + ' : ' + ac.emoji + ' ' + ac.name +
+        info += ' · À ' + (ac.ownerId === Player.id ? 'VOUS' : ac.ownerId) + ' : ' + ac.name +
             ' — ' + state.ap + ' PA' + (state.freeMoves ? ' (+' + state.freeMoves + ' dépl.)' : '');
         if (state.interrupt) info += ' ⚡ action immédiate';
         if (state.turnTotal) {
@@ -470,20 +480,43 @@ function renderHeader(state) {
 
 function renderParty(state) {
     const $list = $('#party-list').empty();
-    state.characters.forEach(c => {
+
+    // List adventurers in the round's play order (rotation starting at the
+    // current first player) so it's easy to see who plays next and when the
+    // round ends. Falls back to the raw list if order data is missing.
+    const order = state.order || state.characters.map(c => c.id);
+    const start = state.firstIndex || 0;
+    const ordered = [];
+    for (let i = 0; i < order.length; i++) {
+        const c = state.characters.find(x => x.id === order[(start + i) % order.length]);
+        if (c && ordered.indexOf(c) === -1) ordered.push(c);
+    }
+    state.characters.forEach(c => { if (ordered.indexOf(c) === -1) ordered.push(c); });
+
+    ordered.forEach(c => {
         let status = '';
         if (c.escaped) status = '<span class="tag escaped">échappé</span>';
         else if (c.dead) status = '<span class="tag dead">mort</span>';
         else if (!c.conscious) status = '<span class="tag ko">inconscient</span>';
         else if (c.hidden) status = '<span class="tag hidden">caché</span>';
         const hpBar = '<div class="hp-bar"><div class="hp-fill" style="width:' + (c.maxHp ? (100 * c.hp / c.maxHp) : 0) + '%"></div></div>';
-        const active = c.id === state.activeId ? ' active' : '';
-        const arrow = c.id === state.activeId ? '<span class="active-arrow"></span>' : '';
+        const isActive = c.id === state.activeId;
+        const active = isActive ? ' active' : '';
+        const arrow = isActive ? '<span class="active-arrow"></span>' : '';
+        // Action points : only the active adventurer currently has any, so show
+        // the line (like the HP line) only on that card.
+        const apRow = isActive
+            ? '<div class="pc-ap">⚡ ' + state.ap + ' PA' +
+              (state.freeMoves ? ' <span class="pc-free">(+' + state.freeMoves + ' dépl.)</span>' : '') + '</div>'
+            : '';
         $list.append('<div class="party-card' + active + '" style="border-color:' + c.color + '">' + arrow +
             '<div class="pc-portrait" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '"></div>' +
             '<div class="pc-info">' +
-            '<div class="pc-name-row"><span class="pc-name">' + c.name + '</span>' + status + '</div>' +
+            '<div class="pc-name-row"><span class="pc-name">' + c.name + '</span>' +
+            '<span class="pc-level" title="Niveau — les dragons ciblent en priorité le niveau le plus bas">Niv. ' + c.level + '</span>' +
+            status + '</div>' +
             '<div class="pc-hp">' + c.hp + '/' + c.maxHp + ' PV ' + hpBar + '</div>' +
+            apRow +
             '<div class="pc-owner">👤 ' + c.ownerId + '</div></div></div>');
     });
 }
@@ -543,7 +576,7 @@ function renderBoard(state) {
         const here = board[cellKey(ac.row, ac.col)];
         if (here) {
             for (let dir = 0; dir < 4; dir++) {
-                if (!here.exits.includes(dir)) continue;
+                if (!tileOpensToward(here, dir)) continue;
                 if (here.doorLocked && here.doorDir === dir) continue;
                 const nr = ac.row + DELTA[dir].r, nc = ac.col + DELTA[dir].c;
                 if (board[cellKey(nr, nc)]) continue;
@@ -571,6 +604,15 @@ function renderBoard(state) {
             'transform': 'rotate(' + (art.rot * 90) + 'deg)'
         }));
 
+        // Fireball breach overlay(s): a blasted opening drawn on top of the tile,
+        // rotated toward the breach edge (canonical art points North / dir 0).
+        (t.breaches || []).forEach(bd => {
+            $tile.append($('<div class="tile-breach"></div>').css({
+                'background-image': 'url(' + ART_PATH + 'breach.png)',
+                'transform': 'rotate(' + (bd * 90) + 'deg)'
+            }));
+        });
+
         // State layer (bad event): coloured veil + icon, on top of the image.
         if (t.state && t.state !== 'normal' && STATE_INFO[t.state]) {
             $tile.append('<div class="state-fx fx-' + t.state + '"></div>');
@@ -589,7 +631,15 @@ function renderBoard(state) {
         });
         state.characters.filter(c => !c.escaped && !c.dead && c.row === t.row && c.col === t.col).forEach(c => {
             const koCls = c.conscious ? '' : ' ko';
-            const activeCls = c.id === state.activeId ? ' tok-active' : '';
+            // Active token aura reflects the remaining action points :
+            //  - blinking white while AP remain, steady once empty ;
+            //  - red (overreach) after an Effort, steady red once empty.
+            let activeCls = '';
+            if (c.id === state.activeId) {
+                activeCls = ' tok-active';
+                if (state.effortUsed) activeCls += ' aura-overreach';
+                if (state.ap <= 0) activeCls += ' aura-empty';
+            }
             const $tok = $('<span class="token char-token' + koCls + activeCls + '" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '" title="' + c.name + ' (' + c.hp + '/' + c.maxHp + ')"></span>');
             $tile.append($tok);
             animateIfMoved($tok, $tile, 'c' + c.id, c.row, c.col, prevPos, curPos);
@@ -608,6 +658,16 @@ function renderBoard(state) {
     });
 
     Game._tokenPos = curPos;
+
+    // When a new adventurer becomes active (turn start), scroll the board so
+    // that adventurer is centred in the viewport.
+    if (state.activeId && state.activeId !== Game._scrolledActiveId) {
+        Game._scrolledActiveId = state.activeId;
+        setTimeout(() => {
+            const el = document.querySelector('#board .tok-active');
+            if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+        }, 60);
+    }
 }
 
 function miniTilePreview(cand, exits) {
@@ -626,9 +686,23 @@ function miniTilePreview(cand, exits) {
 function renderPlacement(state) {
     const $d = $('#placement-dialog');
     const p = state.pending;
-    if (!p) { if ($d.dialog('instance') && $d.dialog('isOpen')) $d.dialog('close'); return; }
+    if (!p) { Game._autoPlaceSig = null; if ($d.dialog('instance') && $d.dialog('isOpen')) $d.dialog('close'); return; }
     if (p.ownerId !== Player.id) {
         // Someone else is placing : show a brief note, no modal.
+        return;
+    }
+
+    // No meaningful choice to make (single tile, single orientation, no reroll) :
+    // e.g. a locked-door corridor, whose direction is already fixed by the arrow.
+    // Place it directly instead of showing a one-button modal.
+    if (p.candidates.length === 1 && p.candidates[0].orientations.length === 1 && !p.canReroll) {
+        const cand = p.candidates[0];
+        const sig = p.dir + ':' + cand.uid; // guard against re-sending on re-renders
+        if (Game._autoPlaceSig !== sig) {
+            Game._autoPlaceSig = sig;
+            if ($d.dialog('instance') && $d.dialog('isOpen')) $d.dialog('close');
+            sendAction('confirm-placement', { source: cand.source, rotation: cand.orientations[0].rotation });
+        }
         return;
     }
     const $c = $d.find('.placement-content').empty();

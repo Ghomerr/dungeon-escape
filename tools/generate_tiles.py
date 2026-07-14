@@ -547,6 +547,65 @@ def prop(img, kind, rnd, off=(0, 0)):
         d.ellipse([9, cy - 8, 14, cy - 1], fill=(250, 220, 120, 230))
 
 
+# --------------------------------------------------------------- fireball breach
+def render_breach():
+    """Overlay marking a wall blasted open by the Pyromancer's fireball.
+
+    Transparent 110x110 canvas with the opening at NORTH (canonical): a scorched
+    rubble corridor stub reaching from the top edge down PAST the tile centre, so
+    that once rotated over any tile it visually joins that tile's central
+    corridor. The client rotates it by (dir * 90deg) to point at the breach edge.
+    """
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img, "RGBA")
+    rnd = random.Random(0xB12EA)
+    x0, x1 = VB[0] - 3, VB[1] + 2          # a touch wider than a normal corridor
+    y_top, y_mid = 0, HC + 6               # reach just past the centre
+
+    # 1. rubble/scorched corridor body from the wall to the centre
+    d.rounded_rectangle([x0, y_top, x1, y_mid], radius=6, fill=(60, 50, 42, 255))
+    # dusty, walkable-looking floor toward the centre
+    for _ in range(260):
+        x = rnd.randint(x0, x1)
+        y = rnd.randint(y_top, y_mid)
+        t = y / max(1, y_mid)              # darker (scorched) at the wall, dustier inside
+        base = lerp((44, 34, 28), (150, 132, 100), t)
+        img.putpixel((x, y), jitter(rnd, base, 16) + (255,))
+    # broken stones along the breach
+    for _ in range(34):
+        sx = rnd.randint(x0 - 2, x1 + 2)
+        sy = rnd.randint(y_top, y_mid)
+        r = rnd.randint(2, 5)
+        col = jitter(rnd, (98, 88, 74), 18)
+        d.rounded_rectangle([sx - r, sy - r, sx + r, sy + r], radius=2,
+                            fill=col + (255,), outline=(40, 34, 26, 255))
+
+    # 2. dark scorch halo at the wall break (top)
+    scorch = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(scorch)
+    sd.ellipse([x0 - 10, -16, x1 + 10, 28], fill=(16, 10, 7, 200))
+    scorch = scorch.filter(ImageFilter.GaussianBlur(3.4))
+    img.alpha_composite(scorch)
+
+    # 3. fiery glow + embers at the blast point
+    glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gd.ellipse([x0 - 8, -10, x1 + 8, 32], fill=(255, 120, 30, 130))
+    glow = glow.filter(ImageFilter.GaussianBlur(4.5))
+    img.alpha_composite(glow)
+    for _ in range(26):
+        x = rnd.randint(x0 - 2, x1 + 2)
+        y = rnd.randint(0, 42)
+        d.ellipse([x - 1, y - 1, x + 1, y + 1], fill=(255, 178, 70, 235))
+        d.point((x, y), fill=(255, 242, 184, 255))
+    # cracks radiating into the surrounding wall
+    for _ in range(6):
+        ax = rnd.randint(x0, x1)
+        d.line([(ax, 3), (ax + rnd.randint(-9, 9), rnd.randint(15, 28))],
+               fill=(18, 12, 8, 210), width=1)
+    return img
+
+
 # --------------------------------------------------------------- rendering a tile
 def render(spec):
     rnd = random.Random(int(hashlib.md5(spec['name'].encode()).hexdigest(), 16) & 0xffffffff)
@@ -718,12 +777,21 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--all', action='store_true')
     ap.add_argument('--preview', action='store_true')
+    ap.add_argument('--breach', action='store_true',
+                    help='(re)generate only the fireball breach overlay')
     ap.add_argument('--out', default=None)
     args = ap.parse_args()
 
     here = os.path.dirname(os.path.abspath(__file__))
     tiles_dir = os.path.normpath(os.path.join(here, '..', 'static', 'assets', 'tiles'))
     specs = all_specs()
+
+    if args.breach:
+        out = args.out or tiles_dir
+        os.makedirs(out, exist_ok=True)
+        render_breach().save(os.path.join(out, 'breach.png'))
+        print(f"breach.png -> {out}")
+        return
 
     if args.preview or not args.all:
         out = args.out or os.path.join(tiles_dir, '_preview')
