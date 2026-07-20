@@ -3,6 +3,28 @@
 All notable changes to Dungeon Escape are documented here.
 Versions use a calendar scheme: `vYYYY.MM.DD`.
 
+## v2026.07.20
+
+### Added
+- **Dangerous-move confirmation**: moving onto a tile that would cost the
+  adventurer HP now asks for confirmation first, recalling the hazard(s) awaiting
+  them — a **Dragon** on the tile (instant knock-out), an **active poison**
+  (−2 PV, unless shielded by the Paladin) or a **trapped plate** (−1 PV on a
+  failed talent roll). Fire tiles are excluded (only the Elf can enter, taking no
+  damage).
+- **End-turn confirmation**: ending the turn while **action points remain** now
+  asks for confirmation (recalling the remaining AP and any free moves) instead
+  of ending straight away.
+
+### Fixed
+- **Dragon lingering on its victim**: a dragon that ended up on the very same
+  tile as a conscious adventurer (e.g. after the adventurer walked onto it) stayed
+  idle in place instead of acting. It now **terrasses** the adventurer, honouring
+  the rule that a dragon always has a victim or vanishes — it never lingers.
+- **Walking onto a Dragon**: an adventurer moving onto a tile occupied by a
+  Dragon now correctly drops to 0 PV and falls **unconscious** (previously nothing
+  happened). The Gnome's stealth still exempts it.
+
 ## v2026.07.14
 
 ### Added

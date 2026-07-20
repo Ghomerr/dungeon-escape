@@ -160,7 +160,18 @@ $(document).ready(() => {
 
     Socket.emit('join-game', { roomId: Player.roomId, userId: Player.id, token: Player.token });
 
-    $('#endturn-btn').click(() => sendAction('end-turn', {}));
+    $('#endturn-btn').click(() => {
+        // Warn before ending the turn while action points are still available.
+        if (isMyTurn() && state && state.ap > 0) {
+            const ac = activeChar();
+            Dialog.openTwoChoicesDialog($('#simple-dialog'), '⏭️ Terminer le tour',
+                'Il reste encore <b>' + state.ap + ' PA</b>' + (state.freeMoves ? ' (+' + state.freeMoves + ' dépl.)' : '') +
+                ' à ' + escapeHtml(ac ? ac.name : 'cet aventurier') + '. Terminer le tour quand même ?',
+                'Terminer le tour', () => sendAction('end-turn', {}), 'Continuer à jouer', null);
+            return;
+        }
+        sendAction('end-turn', {});
+    });
     $('#effort-btn').click(() => sendAction('effort', {}));
 
     $('#game-emoji-bar').on('click', '.emoji-send', function () {
@@ -359,6 +370,34 @@ function showTileDesc(tile) {
         '<div class="td-body">' + escapeHtml(parts[1] || '') + '</div>');
 }
 
+// Dangers that make the active character lose HP just by entering `tile`
+// (see server enterTile). Returns a list of HTML warning lines.
+function moveDangerWarnings(tile, ac) {
+    const warns = [];
+    const immune = ac.abilities && ac.abilities.some(a => a.id === 'stealth');
+    if (!immune && state.dragons && state.dragons.some(d => d.row === tile.row && d.col === tile.col)) {
+        warns.push('🐉 Un <b>Dragon</b> occupe cette tuile : ' + escapeHtml(ac.name) + ' sera <b>terrassé</b> (0 PV, inconscient).');
+    }
+    if (tile.state === 'poisoned') {
+        warns.push('☠️ Tuile <b>empoisonnée</b> : −2 PV (sauf protection du Paladin).');
+    }
+    if (tile.kind === 'trap') {
+        warns.push('⚙️ <b>Plaque piégée</b> : jet de talent raté = −1 PV.');
+    }
+    return warns;
+}
+
+// Run `doIt` (the actual move), but if the destination is dangerous, ask the
+// player to confirm first, recalling the hazard(s) awaiting the adventurer.
+function moveWithConfirm(tile, ac, doIt) {
+    const warns = moveDangerWarnings(tile, ac);
+    if (!warns.length) { doIt(); return; }
+    const body = escapeHtml(ac.name) + ' va entrer sur cette tuile :' +
+        '<ul><li>' + warns.join('</li><li>') + '</li></ul>Confirmer le déplacement ?';
+    Dialog.openTwoChoicesDialog($('#simple-dialog'), '⚠️ Déplacement dangereux', body,
+        'Se déplacer quand même', doIt, 'Annuler', null);
+}
+
 function onTileClick(tile) {
     showTileDesc(tile);
     if (!isMyTurn()) return;
@@ -382,14 +421,14 @@ function onTileClick(tile) {
 
         if (tile.state === 'fire') {
             items.push({ label: '🧯 Éteindre l\'incendie (2 PA)', fn: () => sendAction('extinguish', { dir }) });
-            if (ac.abilities.some(a => a.id === 'elven-agility')) items.push({ label: '🤸 Entrer (Agilité elfique, 1 PA)', fn: () => sendAction('move', { dir }) });
+            if (ac.abilities.some(a => a.id === 'elven-agility')) items.push({ label: '🤸 Entrer (Agilité elfique, 1 PA)', fn: () => moveWithConfirm(tile, ac, () => sendAction('move', { dir })) });
         } else if (tile.kind === 'bridge' && connected) {
             items.push({ label: '🌉 Marcher en équilibre (2 PA)', fn: () => sendAction('walk-bridge', { dir }) });
         } else if (tile.state === 'dark' && sameAxisExit) {
-            if (ac.abilities.some(a => a.id === 'night-vision')) items.push({ label: '👣 Se déplacer (Vision nocturne)', fn: () => sendAction('move', { dir }) });
+            if (ac.abilities.some(a => a.id === 'night-vision')) items.push({ label: '👣 Se déplacer (Vision nocturne)', fn: () => moveWithConfirm(tile, ac, () => sendAction('move', { dir })) });
             else items.push({ label: '🌑 Marcher dans l\'Obscurité (2 PA)', fn: () => sendAction('walk-dark', { dir }) });
         } else if (connected) {
-            items.push({ label: '👣 Se déplacer ici (1 PA)', fn: () => sendAction('move', { dir }) });
+            items.push({ label: '👣 Se déplacer ici (1 PA)', fn: () => moveWithConfirm(tile, ac, () => sendAction('move', { dir })) });
         }
         if (blockedByOwnDoor) items.push({ label: '🗝️ Crocheter la porte qui bloque ce passage (2 PA)', fn: () => sendAction('pick-lock', {}) });
     }

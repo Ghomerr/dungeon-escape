@@ -403,6 +403,16 @@ function enterTile(room, char, tile, opts = {}) {
         return;
     }
 
+    // Stepping onto a Dragon's tile is an instant knock-out (rules: sharing a
+    // tile with a Dragon => 0 HP + unconscious), whatever brought the adventurer
+    // here. The Gnome's stealth (dragonImmune) exempts it. Nothing else matters
+    // once terrassé, so resolve it before traps / poison / fire.
+    if (!char.flags.dragonImmune &&
+        room.game.dragons.some(dr => dr.row === tile.row && dr.col === tile.col)) {
+        knockOutCharsOnCell(room, tile.row, tile.col);
+        return;
+    }
+
     const protectedByPal = paladinProtects(room.game, tile.row, tile.col, char.id);
 
     // Trapped plate : talent roll or lose 1 HP.
@@ -956,7 +966,13 @@ function moveOneDragon(room, dragon) {
         return;
     }
     const dir = Utils.firstStepToward(g.board, dragon.row, dragon.col, target.row, target.col);
-    if (dir === null) return;
+    if (dir === null) {
+        // The only way a targetable adventurer is at distance 0 is that we are
+        // already sharing its tile (e.g. it walked onto the dragon). A dragon
+        // never lingers idle next to a conscious victim — it terrasses it here.
+        knockOutCharsOnCell(room, dragon.row, dragon.col);
+        return;
+    }
     const d = Tiles.DELTA[dir];
     dragon.row += d.row;
     dragon.col += d.col;
