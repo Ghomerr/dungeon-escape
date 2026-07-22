@@ -73,5 +73,10 @@ $(document).ready(() => {
         ]);
         $dialog.find('.dialog-text').html(text);
         $dialog.dialog('open');
+        // jQuery UI sets button labels as text; allow HTML labels (e.g. a
+        // FontAwesome icon) by re-rendering any label that contains markup.
+        const $btns = $dialog.dialog('widget').find('.ui-dialog-buttonpane button');
+        if (/</.test(okLabel)) $btns.eq(0).html(okLabel);
+        if (cancelLabel && /</.test(cancelLabel)) $btns.eq(1).html(cancelLabel);
     };
 });

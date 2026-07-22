@@ -309,7 +309,7 @@ Socket.on('game-error', (data) => {
         const la = Game._lastAction;
         Dialog.openTwoChoicesDialog($('#simple-dialog'), 'Pas assez de PA',
             'Il ne reste que <b>' + Game.state.ap + ' PA</b>.<br>Faire un <b>Effort</b> (+1 PA, jet de talent en fin de tour) puis relancer l\'action ?',
-            'Effort + action', () => { sendAction('effort', {}); sendAction(la.action, la.payload); },
+            '<i class="fas fa-dumbbell"></i> Effort + action', () => { sendAction('effort', {}); sendAction(la.action, la.payload); },
             'Annuler', null);
         return;
     }
@@ -343,7 +343,7 @@ function offerEffortThen(label, cost, runFn) {
     Dialog.openTwoChoicesDialog($('#simple-dialog'), 'Pas assez de PA',
         '<b>' + escapeHtml(label) + '</b> coûte <b>' + cost + ' PA</b>, mais il ne reste que <b>' + Game.state.ap +
         ' PA</b>.<br>Faire un <b>Effort</b> (+1 PA, jet de talent en fin de tour) puis lancer l\'action ?',
-        '💪 Effort + action', () => { sendAction('effort', {}); runFn(); },
+        '<i class="fas fa-dumbbell"></i> Effort + action', () => { sendAction('effort', {}); runFn(); },
         'Annuler', null);
 }
 function isMyTurn() { return Game.state && Game.state.activeOwnerId === Player.id && Game.state.status === 'PLAYING'; }
@@ -553,13 +553,18 @@ const EVENT_COLORS = {
     dragon: '#8b1a1a', gloom: '#2a2f6b', 'sudden-death': '#1a1a1a'
 };
 
+// Events that show a full illustration instead of an emoji icon.
+const EVENT_IMG = { dragon: portraitUrl('dragon') };
+
 // Large central toast shown when a bad event occurs.
 function showEventToast(ev) {
     const info = EVENT_INFO[ev.type] || { icon: '🎴' };
     const $t = $('#event-toast');
     $t[0].style.setProperty('--toast-color', EVENT_COLORS[ev.type] || '#333');
-    $t.html('<span class="toast-icon">' + info.icon + '</span><span class="toast-label">' +
-        escapeHtml(ev.label || '') + '</span>');
+    const iconHtml = EVENT_IMG[ev.type]
+        ? '<img class="toast-img" src="' + EVENT_IMG[ev.type] + '" alt="">'
+        : '<span class="toast-icon">' + info.icon + '</span>';
+    $t.html(iconHtml + '<span class="toast-label">' + escapeHtml(ev.label || '') + '</span>');
     $t.stop(true, true).css({ display: 'flex', opacity: 0 }).animate({ opacity: 1 }, 220);
     clearTimeout(Game._toastTimer);
     Game._toastTimer = setTimeout(() => $t.animate({ opacity: 0 }, 500, () => $t.css('display', 'none')), 3200);
@@ -605,22 +610,24 @@ function renderFireballs(state) {
 }
 
 // Floating heal / damage feedback: when an adventurer's HP changes between two
-// states, a FontAwesome icon pops over their party card (green heart rising for
-// a heal, red cracked heart shaking for damage) then fades out.
+// states, a FontAwesome icon pops over their token ON THE BOARD (green heart
+// rising for a heal, red cracked heart shaking for damage) then fades out.
 function spawnHpFx(state) {
     const prev = Game._prevHp;
     const cur = {};
     state.characters.forEach(c => { cur[c.id] = c.hp; });
-    if (prev) {
+    if (prev && Game._boardMin) {
+        const { minR, minC } = Game._boardMin;
         state.characters.forEach(c => {
             const before = prev[c.id];
             if (before === undefined || before === c.hp) return;
+            if (c.escaped || c.dead) return;   // no token on the board
             const healed = c.hp > before;
-            const $card = $('.party-card[data-cid="' + c.id + '"]');
-            if (!$card.length) return;
-            const $fx = $('<span class="hp-fx ' + (healed ? 'heal' : 'damage') + '"><i class="fas fa-' +
-                (healed ? 'heart-circle-plus' : 'heart-crack') + '"></i></span>');
-            $card.append($fx);
+            const x = (c.col - minC) * CELL + CELL / 2;
+            const y = (c.row - minR) * CELL + CELL / 2;
+            const $fx = $('<span class="hp-fx on-board ' + (healed ? 'heal' : 'damage') + '"><i class="fas fa-' +
+                (healed ? 'heart-circle-plus' : 'heart-crack') + '"></i></span>').css({ left: x + 'px', top: y + 'px' });
+            $('#board').append($fx);
             setTimeout(() => $fx.remove(), 1200);
         });
     }
@@ -706,7 +713,10 @@ function renderEvent(state) {
     const e = state.currentEvent;
     if (!e) { $('#event-content').html('<span class="muted">Aucun événement pour l\'instant.</span>'); return; }
     const info = EVENT_INFO[e.type] || { icon: '🎴', desc: '' };
-    $('#event-content').html('<div class="event-head"><span class="event-icon">' + info.icon + '</span> <b>' + e.label + '</b></div>' +
+    const iconHtml = EVENT_IMG[e.type]
+        ? '<img class="event-img" src="' + EVENT_IMG[e.type] + '" alt="">'
+        : '<span class="event-icon">' + info.icon + '</span>';
+    $('#event-content').html('<div class="event-head">' + iconHtml + ' <b>' + e.label + '</b></div>' +
         '<div class="event-desc">' + info.desc + '</div>' +
         (e.type === 'poison' ? '<div class="hint">Actif jusqu\'à la prochaine phase d\'événement.</div>' : ''));
 }
@@ -749,10 +759,27 @@ function renderBoard(state) {
     let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
     keys.forEach(k => { const t = board[k]; minR = Math.min(minR, t.row); maxR = Math.max(maxR, t.row); minC = Math.min(minC, t.col); maxC = Math.max(maxC, t.col); });
 
-    // Ghost (discoverable) cells around the active character's tile.
-    const ghosts = [];
+    // Ghost cells = every empty cell an existing tile opens toward (a potential
+    // dungeon opening). They are shown at all times to reveal where the dungeon
+    // can still grow. Only those adjacent to the active adventurer (on their
+    // turn) are interactive; the rest are dimmer, non-clickable hints.
+    const ghostMap = {};   // cellKey -> { row, col }
+    keys.forEach(k => {
+        const t = board[k];
+        for (let dir = 0; dir < 4; dir++) {
+            if (!tileOpensToward(t, dir)) continue;
+            if (t.doorLocked && t.doorDir === dir) continue;
+            const nr = t.row + DELTA[dir].r, nc = t.col + DELTA[dir].c;
+            const nk = cellKey(nr, nc);
+            if (board[nk]) continue;
+            if (!ghostMap[nk]) ghostMap[nk] = { row: nr, col: nc };
+        }
+    });
+
+    // Which ghost cells the active adventurer can actually use right now (same
+    // condition as before). No discovery/exploration while running.
+    const interactiveDir = {};   // cellKey -> dir from the active adventurer's tile
     const ac = activeChar();
-    // No discovery/exploration ghosts while running (only movement is allowed then).
     if (ac && isMyTurn() && ac.conscious && !state.pending && !(state.freeMoves > 0)) {
         const here = board[cellKey(ac.row, ac.col)];
         if (here) {
@@ -760,14 +787,22 @@ function renderBoard(state) {
                 if (!tileOpensToward(here, dir)) continue;
                 if (here.doorLocked && here.doorDir === dir) continue;
                 const nr = ac.row + DELTA[dir].r, nc = ac.col + DELTA[dir].c;
-                if (board[cellKey(nr, nc)]) continue;
-                ghosts.push({ row: nr, col: nc, dir });
-                minR = Math.min(minR, nr); maxR = Math.max(maxR, nr); minC = Math.min(minC, nc); maxC = Math.max(maxC, nc);
+                const nk = cellKey(nr, nc);
+                if (board[nk]) continue;
+                if (!ghostMap[nk]) ghostMap[nk] = { row: nr, col: nc };
+                interactiveDir[nk] = dir;
             }
         }
     }
 
+    // Extend the board bounds so every ghost cell stays in view.
+    Object.values(ghostMap).forEach(g => {
+        minR = Math.min(minR, g.row); maxR = Math.max(maxR, g.row);
+        minC = Math.min(minC, g.col); maxC = Math.max(maxC, g.col);
+    });
+
     const rows = maxR - minR + 1, cols = maxC - minC + 1;
+    Game._boardMin = { minR, minC };   // used to place heal/damage fx over tokens
     const $board = $('#board').empty();
     $board.css({ width: cols * CELL + 'px', height: rows * CELL + 'px' });
 
@@ -817,7 +852,7 @@ function renderBoard(state) {
         }
 
         state.dragons.filter(d => d.row === t.row && d.col === t.col).forEach(d => {
-            const $tok = $('<span class="token dragon-token">🐉</span>');
+            const $tok = $('<span class="token dragon-token" style="background-image:url(' + portraitCardUrl('dragon') + ')"></span>');
             $tile.append($tok);
             animateIfMoved($tok, $tile, 'd' + d.id, d.row, d.col, prevPos, curPos);
         });
@@ -841,11 +876,20 @@ function renderBoard(state) {
         $board.append($tile);
     });
 
-    ghosts.forEach(g => {
-        const $gh = $('<div class="tile ghost-cell" title="Explorer / découvrir ici"></div>')
-            .css({ top: (g.row - minR) * CELL + 'px', left: (g.col - minC) * CELL + 'px', width: CELL + 'px', height: CELL + 'px' })
-            .append('<div class="ghost-plus">+</div>');
-        $gh.click(() => onGhostClick(g.row, g.col, g.dir));
+    Object.keys(ghostMap).forEach(nk => {
+        const g = ghostMap[nk];
+        const dir = interactiveDir[nk];
+        const interactive = dir !== undefined;
+        const $gh = $('<div class="tile ghost-cell"></div>')
+            .css({ top: (g.row - minR) * CELL + 'px', left: (g.col - minC) * CELL + 'px', width: CELL + 'px', height: CELL + 'px' });
+        if (interactive) {
+            $gh.addClass('ghost-active').attr('title', 'Explorer / découvrir ici')
+                .append('<div class="ghost-plus">+</div>')
+                .click(() => onGhostClick(g.row, g.col, dir));
+        } else {
+            // Pure visual hint : a possible dungeon opening the player can't use now.
+            $gh.addClass('ghost-hint').attr('title', 'Issue possible du donjon');
+        }
         $board.append($gh);
     });
 

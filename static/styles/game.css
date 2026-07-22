@@ -36,6 +36,10 @@ body.in-game { overflow: hidden; }
     animation: toast-pop .35s ease-out;
 }
 .event-toast .toast-icon { font-size: 3.4rem; line-height: 1; }
+.event-toast .toast-img {
+    width: 190px; max-width: 60vw; aspect-ratio: 1 / 1; object-fit: cover;
+    border-radius: 12px; border: 2px solid #ffffff88; box-shadow: 0 4px 16px #000a;
+}
 .event-toast .toast-label { font-size: 2.1rem; font-weight: bold; letter-spacing: 1px; }
 @keyframes toast-pop {
     0% { transform: translate(-50%, -50%) scale(.7); }
@@ -132,7 +136,13 @@ body.in-game { overflow: hidden; }
 .event-box { margin-top: 8px; }
 .event-content { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
 .event-icon { font-size: 1.2rem; }
-.event-head { font-size: 1rem; }
+.event-head { font-size: 1rem; display: flex; align-items: center; gap: 8px; }
+/* Full illustration for image-based events (dragon) in the reminder box. */
+.event-img {
+    width: 100%; max-height: 150px; object-fit: cover; border-radius: 6px;
+    border: 1px solid var(--border); display: block; margin-bottom: 6px;
+}
+.event-head:has(.event-img) { display: block; }
 .event-desc { font-size: .8rem; color: var(--muted); margin-top: 5px; line-height: 1.35; }
 .muted { color: var(--muted); }
 .resources { margin-top: 12px; color: var(--muted); font-size: .9rem; display: flex; flex-direction: column; gap: 4px; }
@@ -230,11 +240,21 @@ body.in-game { overflow: hidden; }
 /* ghost (discoverable) cells */
 .ghost-cell {
     background: transparent;
-    border: 2px dashed #c79a4788;
     display: flex; align-items: center; justify-content: center;
+}
+/* Interactive : the active adventurer can explore / discover here. */
+.ghost-cell.ghost-active {
+    border: 2px dashed #c79a4788;
     cursor: pointer;
 }
-.ghost-cell:hover { background: #c79a4722; outline: none; }
+.ghost-cell.ghost-active:hover { background: #c79a4722; outline: none; }
+/* Non-interactive hint : a possible dungeon opening, shown faintly, no clicks. */
+.ghost-cell.ghost-hint {
+    border: 2px dashed #c79a4733;
+    opacity: .5;
+    cursor: default;
+    pointer-events: none;
+}
 .ghost-plus { font-size: 2rem; color: #c79a47aa; }
 
 /* tile kinds (the corridor floor tint) */
@@ -301,7 +321,11 @@ body.in-game { overflow: hidden; }
     0%, 100% { box-shadow: 0 0 0 2px #ff3b1f, 0 0 6px 2px #ff3b1faa; }
     50% { box-shadow: 0 0 0 2px #ff3b1f, 0 0 16px 6px #ff3b1fee; }
 }
-.dragon-token { background: #5a1d12; font-size: 1.1rem; width: 30px; height: 30px; animation: pulse 1.4s infinite; }
+.dragon-token {
+    width: 34px; height: 34px; border-color: #ff3b1f;
+    background-color: #5a1d12; background-size: cover; background-position: center;
+    animation: pulse 1.4s infinite;
+}
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 4px #ff3b1f; } 50% { box-shadow: 0 0 12px #ff3b1f; } }
 
 /* multiple tokens wrap inside a tile */
@@ -387,6 +411,8 @@ body.in-game { overflow: hidden; }
     pointer-events: none; z-index: 40; font-size: 1.5rem;
     text-shadow: 0 1px 3px #000, 0 0 6px currentColor;
 }
+/* Board variant: positioned (inline left/top) over the adventurer's token. */
+.hp-fx.on-board { font-size: 1.7rem; z-index: 40; }
 .hp-fx.heal { color: #46d66b; animation: hpfx-heal 1.15s ease-out forwards; }
 .hp-fx.damage { color: #ff4433; animation: hpfx-dmg 1.05s ease-out forwards; }
 @keyframes hpfx-heal {

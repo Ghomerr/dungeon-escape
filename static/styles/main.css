@@ -65,6 +65,18 @@ main {
     display: flex;
     flex-direction: column;
     gap: 20px;
+    position: relative;
+}
+/* Home screen only: the full dragon illustration as a faded backdrop behind
+   the connection zone (kept subtle so the form stays readable). */
+body.dungeon-escape:not(.in-game)::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: url('../assets/adventurers/dragon.png') no-repeat center 58% / min(680px, 92vw) auto;
+    opacity: .16;
+    pointer-events: none;
 }
 
 .panel {
@@ -206,8 +218,10 @@ button.primary:hover:not(:disabled) { background: linear-gradient(to bottom, #e0
 .char-card.mine { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold) inset; }
 .char-card.taken:not(.mine) { cursor: not-allowed; }
 .char-portrait {
-    width: 100%; aspect-ratio: 1 / 1; border-radius: 8px;
-    background-size: cover; background-position: center;
+    width: 100%; aspect-ratio: 1 / 1; border-radius: 50%;
+    /* Zoom slightly (>100%) so the drawn border of the illustration is cropped
+       out by the round frame instead of showing as a ring. */
+    background-size: 130%; background-position: center;
     border: 3px solid #0006; margin: 0 auto 8px;
     box-shadow: 0 2px 6px #0008;
 }

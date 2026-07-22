@@ -22,12 +22,21 @@ Versions use a calendar scheme: `vYYYY.MM.DD`.
   to spend an **Effort** (+1 PA) and carry out the action in one step — both from
   the action buttons and from board-driven moves.
 - **Heal / damage feedback**: a green rising *heart-circle-plus* on a heal and a
-  red shaking *heart-crack* on damage pop over the affected adventurer's card.
+  red shaking *heart-crack* on damage pop over the affected adventurer's **token
+  on the board**.
 - **New adventurer artwork** used throughout, with a clear split: the **full
-  illustration** on the selection card and the in-game party card, and the
-  round **portrait** on the board pawns and the lobby "assigned" pawns.
-  Adventurers are no longer designated by emojis anywhere (target menus show the
-  portrait).
+  illustration** on the selection card (round frame, slightly zoomed to crop the
+  drawn border) and the in-game party card, and the round **portrait** on the
+  board pawns and the lobby "assigned" pawns. Adventurers are no longer
+  designated by emojis anywhere (target menus show the portrait).
+- **Dragon artwork**: the **Dragon** event now shows the dragon illustration in
+  the current-event reminder and the central toast; dragons on the board use the
+  dragon **portrait**; and the lobby screen uses the dragon illustration as a
+  faded backdrop behind the connection panel.
+- **Dungeon openings always visible**: every cell the dungeon could still grow
+  into is now shown at all times — a dim, non-interactive hint by default, and a
+  highlighted, clickable slot when the active adventurer can explore / discover
+  there.
 
 ### Fixed
 - **End-turn crash**: passing / ending the turn threw `state is not defined`.
