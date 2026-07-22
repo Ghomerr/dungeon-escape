@@ -10,8 +10,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="static/styles/main.css">
     <link rel="stylesheet" type="text/css" href="static/styles/dialog.css">
+
+    <audio id="bg-music" src="static/assets/musics/deuslower-dungeon-music.mp3" loop></audio>
+
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://code.jquery.com/ui/1.14.1/jquery-ui.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="static/scripts/dialog.js"></script>
     <script src="static/scripts/client.js"></script>
@@ -117,14 +121,20 @@
         <div id="simple-dialog" title="Message">
             <div class="dialog-text"></div>
         </div>
+
+        <div id="markdown-dialog" title="Document" style="display:none;">
+            <div class="markdown-body"></div>
+        </div>
     </main>
 
     <footer id="footer">
         <span id="debug-button" title="Debug"></span>
         <span><i class="fas fa-dragon"></i></span>
-        <span class="version">Dungeon Escape <span id="version-tag"></span></span>
+        <span class="version" id="version-link" title="Voir le changelog">Dungeon Escape <span id="version-tag"></span></span>
         <span class="sep">—</span>
-        <span class="rules"><a href="rules.md" target="_blank"><i class="fas fa-book"></i> Règles du jeu</a></span>
+        <span class="music" id="audio-control">Musique <i class="fas fa-volume-xmark"></i></span>
+        <span class="sep">—</span>
+        <span class="rules"><a href="#" id="rules-link"><i class="fas fa-book"></i> Règles du jeu</a></span>
         <span class="sep">—</span>
         <span class="twitter"><a href="https://twitter.com/Ghomerr" target="_blank"><i class="fab fa-twitter"></i> @Ghomerr</a></span>
     </footer>

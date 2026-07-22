@@ -3,6 +3,43 @@
 All notable changes to Dungeon Escape are documented here.
 Versions use a calendar scheme: `vYYYY.MM.DD`.
 
+## v2026.07.22
+
+### Added
+- **Background music**: the dungeon theme now starts automatically on the lobby
+  and in-game pages. Because browsers block autoplay without a user gesture, it
+  falls back to starting on the first click / keypress if the browser refuses.
+  The on/off choice is remembered (shared between both pages).
+- **Live rules & changelog viewer**: the *Rules* link (footer + in-game header)
+  and the version tag (→ changelog) now open the markdown rendered in a modal,
+  without leaving the game. Content is fetched live, so it always reflects the
+  current file (no frozen HTML copy).
+- **Fireball counter**: the Pyromancer's remaining fireballs are shown next to
+  the lock-pick kits and the draw pile, so the whole party can see them.
+- **Ability reminders**: hovering an adventurer's party card recalls their
+  abilities and what each one does.
+- **Auto-effort**: attempting an action while one action point short now offers
+  to spend an **Effort** (+1 PA) and carry out the action in one step — both from
+  the action buttons and from board-driven moves.
+- **Heal / damage feedback**: a green rising *heart-circle-plus* on a heal and a
+  red shaking *heart-crack* on damage pop over the affected adventurer's card.
+- **New framed portraits** (`*_portrait.png`) on the character cards (lobby +
+  in-game) and in the target-selection menus. Adventurers are no longer
+  designated by emojis anywhere.
+
+### Changed
+- **FontAwesome icons**: action / ability buttons, the turn controls (Effort,
+  End turn, Cancel) and the resource lines (kits, draw pile, fireballs) now use
+  solid FontAwesome icons instead of emojis. Reactions and on-tile event icons
+  keep their emojis.
+- **Tiles — legibility**: the golden frame and corner ornaments were removed
+  from every tile.
+- **Tiles — dragon lairs**: lairs are now spacious, imperfectly round chambers
+  in dark red (including the elbow lairs, now full rooms with two perpendicular
+  exits) so they clearly stand apart. Their decor (chest, bones, gold, skull) is
+  no longer baked in — it is generated as standalone overlays
+  (`decor-*.png`) and drawn upright over the tile, whatever its rotation.
+
 ## v2026.07.20
 
 ### Added
@@ -125,3 +162,49 @@ Versions use a calendar scheme: `vYYYY.MM.DD`.
 
 ### Changed
 - All source-code comments are now in English.
+
+## v2026.07.05
+
+### Added
+- **Complete tile art set**: procedurally generated PNGs for every dungeon tile
+  — corridors, corners (elbows), crossroads, T-junctions, dead-ends, suspended
+  bridges, locked doors (front / back, with open variants), trapped plates,
+  flammable, poisonable and gloom tiles, dragon lairs, and the start / exit
+  tiles. Replaces the earlier hand-made placeholders (kept under
+  `_handmade_backup/`).
+- **Adventurer sprites**: individual artwork for the eight adventurers (bard,
+  druid, dwarf, elf-rogue, gnome, paladin, pyromancer, shadow-hunter) plus a
+  combined reference sheet, used as the board pawns.
+
+## v2026.06.23
+
+### Added
+- **Tile-generation pipeline**: documented art-generation prompts
+  (`prompts_generation_tuiles.md`) and a reference asset, laying the groundwork
+  for the procedural tile set.
+
+## v2026.06.17
+
+### Added
+- **First playable build** — real-time multiplayer over Socket.IO.
+- **Lobby**: create or join rooms (public or password-protected), random
+  room-name generator, live list of ongoing games, character selection,
+  difficulty settings, player kick, emoji reactions, and reliable reconnection
+  via a per-player id + token.
+- **Server game engine**: procedural dungeon / board generation, turn and round
+  management, action points, the eight adventurers and their abilities,
+  event / misfortune cards, dragons, locked doors, trapped plates, and the
+  fire / poison / darkness tile states, plus win / lose resolution.
+- **Game client**: dungeon board rendering, party panel, action buttons, event
+  log, and the direction / placement / choice dialogs.
+
+## v2026.06.16 (pre-release — documentation & rules)
+
+### Added
+- **Project scaffolding**: LICENSE, README and the Node package manifest.
+- **Full game rules** (`rules.md`), authored iteratively through June 2026:
+  dungeon tiles and event cards, Pyromancer fireballs, Dragon mechanics, and the
+  complete adventurer roster.
+
+<!-- Entries above v2026.07.11 were reconstructed from the git history
+     (commits 7002c6d → b18d330, 2026-06-01 → 2026-07-05). -->

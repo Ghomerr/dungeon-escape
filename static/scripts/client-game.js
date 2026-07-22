@@ -64,6 +64,13 @@ const TILE_ART = {
     'start|cross': ['entrance'],
     'exit|deadend': ['exit']
 };
+// Dragon-lair decor combos, picked deterministically per tile (uid). Rendered
+// upright over the chamber from standalone assets (decor-<name>.png).
+const DRAGON_DECOR = [
+    ['gold', 'chest'], ['bones', 'skull'], ['chest', 'gold'],
+    ['skull', 'bones'], ['gold', 'skull'], ['chest', 'bones']
+];
+
 // Exits (dirs) as drawn in the base image, before rotation.
 // Every image of a given shape is drawn in the SAME canonical orientation
 // (elbows = NE, corridors = NS, T = ESW...), cf. tools/generate_tiles.py.
@@ -105,8 +112,15 @@ function tileArt(t) {
 }
 
 // --- Adventurer portraits ---------------------------------------------------
-// Files are named after the character id: static/assets/adventurers/<id>.png
+// Board pawns use <id>.png; character cards / target menus use the framed
+// <id>_portrait.png variant.
 function portraitUrl(id) { return 'static/assets/adventurers/' + id + '.png'; }
+function portraitCardUrl(id) { return 'static/assets/adventurers/' + id + '_portrait.png'; }
+// Inline portrait + name, to designate an adventurer in a menu (no emoji).
+function charMenuLabel(c, suffix) {
+    return '<img class="menu-portrait" src="' + portraitCardUrl(c.id) + '" alt="">' +
+        '<span class="menu-char-name">' + escapeHtml(c.name) + (suffix || '') + '</span>';
+}
 
 const EVENT_INFO = {
     fire: { icon: '🔥', desc: 'Un jet de dé désigne les tuiles inflammables qui prennent feu (-3 PV ; Pyromancien -1).' },
@@ -117,15 +131,20 @@ const EVENT_INFO = {
     'sudden-death': { icon: '💀', desc: 'Le temps est écoulé : chaque aventurier encore dans le donjon fait un jet de talent ; échec = éliminé.' }
 };
 
+// FontAwesome (free, solid) equivalents for the action / ability buttons.
+const faIco = (name) => '<i class="fas fa-' + name + '"></i>';
 const ACTION_ICON = {
-    discover: '🧱', explore: '🧭', move: '👣', run: '🏃', heal: '➕',
-    'walk-dark': '🌑', 'walk-bridge': '🌉', extinguish: '🧯', 'pick-lock': '🗝️', hide: '🙈'
+    discover: faIco('magnifying-glass'), explore: faIco('compass'), move: faIco('shoe-prints'),
+    run: faIco('person-running'), heal: faIco('heart-circle-plus'),
+    'walk-dark': faIco('moon'), 'walk-bridge': faIco('bridge'), extinguish: faIco('fire-extinguisher'),
+    'pick-lock': faIco('key'), hide: faIco('mask')
 };
 const ABILITY_ICON = {
-    'flame-mastery': '🧯', 'apply-balm': '🌿', 'animal-celerity': '🐾', 'lockpicking': '🗝️',
-    'slay-dragon': '⚔️', 'inspiration': '🎵', 'fireball': '💥', 'shadow-walk': '🌑',
-    'night-vision': '👁️', 'strategic-retreat': '🔄', 'stealth': '🙈', 'rock-memory': '🪨',
-    'fire-resist': '🔥', 'elven-agility': '🤸', 'luck': '🍀', 'sacrifice': '🛡️'
+    'flame-mastery': faIco('fire-extinguisher'), 'apply-balm': faIco('leaf'), 'animal-celerity': faIco('paw'),
+    'lockpicking': faIco('key'), 'slay-dragon': faIco('hand-fist'), 'inspiration': faIco('music'),
+    'fireball': faIco('burst'), 'shadow-walk': faIco('moon'), 'night-vision': faIco('eye'),
+    'strategic-retreat': faIco('arrows-rotate'), 'stealth': faIco('user-ninja'), 'rock-memory': faIco('mountain'),
+    'fire-resist': faIco('fire'), 'elven-agility': faIco('feather'), 'luck': faIco('clover'), 'sacrifice': faIco('shield-halved')
 };
 
 const BASE_ACTIONS = [
@@ -187,6 +206,54 @@ $(document).ready(() => {
     $('#pause-end-btn').click(() => {
         Socket.emit('end-game-early', { roomId: Player.roomId, ownerId: Player.id, token: Player.token });
     });
+
+    // Live markdown viewers (rules + changelog), available during the game.
+    $('#rules-link').on('click', () => Dialog.openMarkdown('rules.md', '📖 Règles du jeu'));
+    $('#changelog-link').on('click', () => Dialog.openMarkdown('changelog.md', '📜 Changelog'));
+
+    // --- Background music ---------------------------------------------------
+    const $audioControl = $('#audio-control');
+    const audio = $('#bg-music')[0];
+    // Music preference is shared with the lobby page; default ON unless the
+    // player explicitly muted it earlier.
+    let musicEnabled = localStorage.getItem('de-music') !== 'off';
+
+    const setMusicIcon = (playing) => {
+        $audioControl.find('i')
+            .toggleClass('fa-volume-high', playing)
+            .toggleClass('fa-volume-xmark', !playing);
+    };
+
+    // Autoplay is blocked when no user gesture carried across the navigation
+    // (always the case for non-host players pushed here by `game-started`).
+    // Try now; if the browser refuses, start on the first interaction in-game.
+    const armGestureFallback = () => {
+        const resume = () => {
+            document.removeEventListener('pointerdown', resume);
+            document.removeEventListener('keydown', resume);
+            if (musicEnabled) audio.play().then(() => setMusicIcon(true)).catch(() => {});
+        };
+        document.addEventListener('pointerdown', resume);
+        document.addEventListener('keydown', resume);
+    };
+
+    $audioControl.click(() => {
+        if (audio.paused) {
+            musicEnabled = true;
+            localStorage.setItem('de-music', 'on');
+            audio.play().then(() => setMusicIcon(true)).catch(() => {});
+        } else {
+            musicEnabled = false;
+            localStorage.setItem('de-music', 'off');
+            audio.pause();
+            setMusicIcon(false);
+        }
+    });
+
+    setMusicIcon(false);
+    if (musicEnabled) {
+        audio.play().then(() => setMusicIcon(true)).catch(() => armGestureFallback());
+    }
 });
 
 window.addEventListener('beforeunload', () => {
@@ -235,12 +302,22 @@ Socket.on('game-error', (data) => {
         'run-move-only': 'Pendant une course / célérité, seul le déplacement est possible.',
         'nothing-to-cancel': 'Rien à annuler (le déplacement a déjà commencé).'
     };
+    // Ran out of action points on an action triggered from the board (a move
+    // by clicking an adjacent tile, etc.): offer an Effort then replay it.
+    if (data.error === 'no-ap' && canEffort() && Game._lastAction && Game._lastAction.action !== 'effort') {
+        const la = Game._lastAction;
+        Dialog.openTwoChoicesDialog($('#simple-dialog'), '💪 Pas assez de PA',
+            'Il ne reste que <b>' + Game.state.ap + ' PA</b>.<br>Faire un <b>Effort</b> (+1 PA, jet de talent en fin de tour) puis relancer l\'action ?',
+            '💪 Effort + action', () => { sendAction('effort', {}); sendAction(la.action, la.payload); },
+            'Annuler', null);
+        return;
+    }
     if (data.error && M[data.error]) Dialog.openSimpleDialog($('#simple-dialog'), '⛔ Action impossible', M[data.error]);
 });
 
 Socket.on('emoji', (data) => {
     const $b = $('#game-emoji-bubble');
-    $b.text(data.from + ' ' + data.emoji).stop(true, true).css('opacity', 1);
+    $b.html(Dialog.reactionHtml(data.from, data.emoji)).stop(true, true).css('opacity', 1);
     clearTimeout(Game._emojiTimer);
     Game._emojiTimer = setTimeout(() => $b.fadeTo(600, 0, () => $b.text('').css('opacity', 1)), 2500);
 });
@@ -250,7 +327,23 @@ Socket.on('game-state', (state) => { Game.state = state; render(state); });
 // --- Helpers ---------------------------------------------------------------
 
 function sendAction(action, payload) {
+    Game._lastAction = { action, payload: payload || {} };
     Socket.emit('game-action', { roomId: Player.roomId, userId: Player.id, token: Player.token, action, payload: payload || {} });
+}
+
+// Offer an Effort (+1 PA) then run the action, when the active adventurer is one
+// point short. Emits happen in order over the socket, so the server processes
+// the Effort before the action.
+function canEffort() {
+    const s = Game.state, ac = activeChar();
+    return isMyTurn() && ac && ac.conscious && s && !s.effortUsed && !s.pending;
+}
+function offerEffortThen(label, cost, runFn) {
+    Dialog.openTwoChoicesDialog($('#simple-dialog'), '💪 Pas assez de PA',
+        '<b>' + escapeHtml(label) + '</b> coûte <b>' + cost + ' PA</b>, mais il ne reste que <b>' + Game.state.ap +
+        ' PA</b>.<br>Faire un <b>Effort</b> (+1 PA, jet de talent en fin de tour) puis lancer l\'action ?',
+        '💪 Effort + action', () => { sendAction('effort', {}); runFn(); },
+        'Annuler', null);
 }
 function isMyTurn() { return Game.state && Game.state.activeOwnerId === Player.id && Game.state.status === 'PLAYING'; }
 function activeChar() { return Game.state ? Game.state.characters.find(c => c.id === Game.state.activeId) : null; }
@@ -303,19 +396,19 @@ function runActionMode(mode, def, isAbility) {
             if (!cands.length) return;
             // Alone on the tile : heal oneself immediately, no target menu.
             if (cands.length === 1) { emit({ targetId: cands[0].id }); return; }
-            openMenu('Soigner qui ?', cands.map(c => ({ label: c.emoji + ' ' + c.name + ' (' + c.hp + '/' + c.maxHp + ')', fn: () => emit({ targetId: c.id }) })));
+            openMenu('Soigner qui ?', cands.map(c => ({ label: charMenuLabel(c, ' (' + c.hp + '/' + c.maxHp + ')'), fn: () => emit({ targetId: c.id }) })));
             break;
         }
         case 'otherSameTile': {
             const cands = Game.state.characters.filter(c => c.id !== ac.id && !c.escaped && !c.dead && c.row === ac.row && c.col === ac.col);
             if (!cands.length) { Dialog.openSimpleDialog($('#simple-dialog'), 'Aucune cible', 'Aucun autre aventurier sur cette tuile.'); return; }
-            openMenu('Cible', cands.map(c => ({ label: c.emoji + ' ' + c.name, fn: () => emit({ targetId: c.id }) })));
+            openMenu('Cible', cands.map(c => ({ label: charMenuLabel(c), fn: () => emit({ targetId: c.id }) })));
             break;
         }
         case 'otherAny': {
             const cands = Game.state.characters.filter(c => c.id !== ac.id && !c.escaped && !c.dead && c.conscious);
             if (!cands.length) return;
-            openMenu('Inspirer quel aventurier ?', cands.map(c => ({ label: c.emoji + ' ' + c.name + ' (' + c.ownerId + ')', fn: () => emit({ targetId: c.id }) })));
+            openMenu('Inspirer quel aventurier ?', cands.map(c => ({ label: charMenuLabel(c, ' (' + escapeHtml(c.ownerId) + ')'), fn: () => emit({ targetId: c.id }) })));
             break;
         }
         case 'shadowDest': {
@@ -494,6 +587,42 @@ function render(state) {
     renderPlacement(state);
     $('#kit-count').text(state.lockpickKits);
     $('#deck-count').text(state.deckLeft);
+    renderFireballs(state);
+    spawnHpFx(state);
+}
+
+// Fireball counter (Pyromancer only) — shown next to kits / deck so the whole
+// party can see how many blasts are left.
+const FIREBALL_USES = 3;
+function renderFireballs(state) {
+    const pyro = state.characters.find(c => c.abilities && c.abilities.some(a => a.id === 'fireball'));
+    if (!pyro) { $('#fireball-res').hide(); return; }
+    const left = Math.max(0, FIREBALL_USES - ((pyro.uses && pyro.uses.fireball) || 0));
+    $('#fireball-count').text(left + ' / ' + FIREBALL_USES);
+    $('#fireball-res').css('display', '');
+}
+
+// Floating heal / damage feedback: when an adventurer's HP changes between two
+// states, a FontAwesome icon pops over their party card (green heart rising for
+// a heal, red cracked heart shaking for damage) then fades out.
+function spawnHpFx(state) {
+    const prev = Game._prevHp;
+    const cur = {};
+    state.characters.forEach(c => { cur[c.id] = c.hp; });
+    if (prev) {
+        state.characters.forEach(c => {
+            const before = prev[c.id];
+            if (before === undefined || before === c.hp) return;
+            const healed = c.hp > before;
+            const $card = $('.party-card[data-cid="' + c.id + '"]');
+            if (!$card.length) return;
+            const $fx = $('<span class="hp-fx ' + (healed ? 'heal' : 'damage') + '"><i class="fas fa-' +
+                (healed ? 'heart-circle-plus' : 'heart-crack') + '"></i></span>');
+            $card.append($fx);
+            setTimeout(() => $fx.remove(), 1200);
+        });
+    }
+    Game._prevHp = cur;
 }
 
 function renderHeader(state) {
@@ -515,6 +644,17 @@ function renderHeader(state) {
     else $('#turns-left').text('Tours restants : ' + state.turnsLeft);
     if (state.dragons.length) $('#dragon-marker').show().text('🐉 ×' + state.dragons.length + ' dans le donjon');
     else $('#dragon-marker').hide();
+}
+
+// Multi-line tooltip recalling an adventurer's abilities and what they do,
+// shown on hover over their party card.
+function attrEscape(s) { return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function abilitiesTip(c) {
+    const lines = (c.abilities || []).map(a => {
+        const cost = a.passive ? 'passif' : (a.cost + ' PA');
+        return '• ' + a.name + ' (' + cost + ') : ' + a.description;
+    });
+    return attrEscape(c.name + '\n' + lines.join('\n'));
 }
 
 function renderParty(state) {
@@ -548,15 +688,15 @@ function renderParty(state) {
             ? '<div class="pc-ap">⚡ ' + state.ap + ' PA' +
               (state.freeMoves ? ' <span class="pc-free">(+' + state.freeMoves + ' dépl.)</span>' : '') + '</div>'
             : '';
-        $list.append('<div class="party-card' + active + '" style="border-color:' + c.color + '">' + arrow +
-            '<div class="pc-portrait" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '"></div>' +
+        $list.append('<div class="party-card' + active + '" data-cid="' + c.id + '" title="' + abilitiesTip(c) + '" style="border-color:' + c.color + '">' + arrow +
+            '<div class="pc-portrait" style="background-image:url(' + portraitCardUrl(c.id) + ');border-color:' + c.color + '"></div>' +
             '<div class="pc-info">' +
             '<div class="pc-name-row"><span class="pc-name">' + c.name + '</span>' +
             '<span class="pc-level" title="Niveau — les dragons ciblent en priorité le niveau le plus bas">Niv. ' + c.level + '</span>' +
             status + '</div>' +
             '<div class="pc-hp">' + c.hp + '/' + c.maxHp + ' PV ' + hpBar + '</div>' +
             apRow +
-            '<div class="pc-owner">👤 ' + c.ownerId + '</div></div></div>');
+            '<div class="pc-owner"><i class="fas fa-user"></i> ' + escapeHtml(c.ownerId) + '</div></div></div>');
     });
 }
 
@@ -651,6 +791,17 @@ function renderBoard(state) {
                 'transform': 'rotate(' + (bd * 90) + 'deg)'
             }));
         });
+
+        // Dragon-lair decor: chest / bones / gold / skull drawn UPRIGHT over the
+        // chamber (never rotated with the tile), so it always reads correctly.
+        if (t.kind === 'dragon-lair') {
+            const combo = DRAGON_DECOR[(((t.uid || 0) % DRAGON_DECOR.length) + DRAGON_DECOR.length) % DRAGON_DECOR.length];
+            combo.forEach((name, i) => {
+                const cls = combo.length === 1 ? 'd1' : (i === 0 ? 'd2a' : 'd2b');
+                $tile.append($('<div class="tile-decor ' + cls + '"></div>').css(
+                    'background-image', 'url(' + ART_PATH + 'decor-' + name + '.png)'));
+            });
+        }
 
         // State layer (bad event): coloured veil + icon, on top of the image.
         if (t.state && t.state !== 'normal' && STATE_INFO[t.state]) {
@@ -785,18 +936,26 @@ function renderActions(state) {
         if (running) return def.action === 'move';
         return ap >= def.cost;
     };
+    // One point short and not yet exhausted: the button stays clickable and
+    // offers an Effort (+1 PA) first.
+    const effortAssistFor = (def) =>
+        my && ac && ac.conscious && !blockedByPending && !running &&
+        !state.effortUsed && def.cost > 0 && ap < def.cost && (ap + 1) >= def.cost;
     const buildBtn = (def, isAbility) => {
         const icon = isAbility ? (ABILITY_ICON[def.abilityId] || '✨') : (ACTION_ICON[def.action] || '');
         const $b = $('<button class="action-btn"><span class="act-ico">' + icon + '</span><span class="act-lbl">' + def.label +
             '</span><span class="ap-cost">' + (def.cost ? def.cost + ' PA' : '') + '</span></button>');
         $b.attr('title', def.tip);
-        $b.prop('disabled', !enabledFor(def));
-        if (enabledFor(def)) $b.click(() => runActionMode(def.mode, def, isAbility));
+        const normal = enabledFor(def);
+        const assist = !normal && effortAssistFor(def);
+        $b.prop('disabled', !(normal || assist));
+        if (normal) $b.click(() => runActionMode(def.mode, def, isAbility));
+        else if (assist) { $b.addClass('needs-effort'); $b.click(() => offerEffortThen(def.label, def.cost, () => runActionMode(def.mode, def, isAbility))); }
         return $b;
     };
     // Cancel button shown in place of the Run / Celerity button until a move starts.
     const buildCancelBtn = (label) => {
-        const $b = $('<button class="action-btn cancel-run-btn"><span class="act-ico">↩️</span><span class="act-lbl">' +
+        const $b = $('<button class="action-btn cancel-run-btn"><span class="act-ico">' + faIco('rotate-left') + '</span><span class="act-lbl">' +
             label + '</span><span class="ap-cost"></span></button>');
         const enabled = my && !blockedByPending && !!state.cancelRunKind;
         $b.prop('disabled', !enabled);
@@ -836,7 +995,7 @@ function renderActions(state) {
         const koNote = ac && !ac.conscious ? ' (inconscient — passez votre tour)' : '';
         const inter = state.interrupt ? ' ⚡' : '';
         $('#active-banner').text('À vous : ' + (ac ? ac.name : '') + inter + koNote).addClass('your-turn');
-        $('#endturn-btn').html('<span class="act-ico">⏭️</span> ' + (ac && !ac.conscious ? 'Passer le tour' : (state.interrupt ? 'Finir l\'action' : 'Finir le tour')));
+        $('#endturn-btn').html('<span class="act-ico">' + faIco('forward-step') + '</span> ' + (ac && !ac.conscious ? 'Passer le tour' : (state.interrupt ? 'Finir l\'action' : 'Finir le tour')));
     } else {
         $('#active-banner').text('Tour de ' + (state.activeOwnerId || '…') + (state.interrupt ? ' (action immédiate)' : '')).removeClass('your-turn');
     }

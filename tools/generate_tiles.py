@@ -64,13 +64,24 @@ def font(size):
 
 
 # --------------------------------------------------------------- floor mask
-def floor_mask(dirs, room):
+def floor_mask(dirs, room, lair=False, rnd=None):
     """L mask (255 = floor). dirs: subset of {'N','S','E','W'}."""
     m = Image.new("L", (W, H), 0)
     d = ImageDraw.Draw(m)
     # central junction pad (always present when there is an opening)
     if dirs:
-        if room:
+        if lair:
+            # Organic, imperfectly round chamber: a big central disc plus a few
+            # overlapping blobs (deterministic jitter) so no two lairs share the
+            # same silhouette. Leaves plenty of room in the centre for props,
+            # while the corridor stubs below keep the exits at the edges.
+            rr = rnd if rnd is not None else random.Random(1234)
+            d.ellipse([VC - 34, HC - 34, VC + 34, HC + 34], fill=255)
+            for _ in range(6):
+                ox, oy = rr.randint(-14, 14), rr.randint(-14, 14)
+                rad = rr.randint(14, 22)
+                d.ellipse([VC + ox - rad, HC + oy - rad, VC + ox + rad, HC + oy + rad], fill=255)
+        elif room:
             d.rounded_rectangle([16, 16, W - 17, H - 17], radius=10, fill=255)
         else:
             d.rectangle([VB[0] - 4, HB[0] - 4, VB[1] + 3, HB[1] + 3], fill=255)
@@ -137,11 +148,11 @@ def stone_floor(rnd, base=FLOOR, mortar=MORTAR):
 
 
 # --------------------------------------------------------------- base assembly
-def base_tile(rnd, dirs, room=False, floor_base=FLOOR, mortar=MORTAR,
+def base_tile(rnd, dirs, room=False, lair=False, floor_base=FLOOR, mortar=MORTAR,
               wall_img=None, floor_img=None):
     wall = wall_img if wall_img else stone_wall(rnd)
     floor = floor_img if floor_img else stone_floor(rnd, floor_base, mortar)
-    mask = floor_mask(dirs, room)
+    mask = floor_mask(dirs, room, lair=lair, rnd=rnd)
     img = wall.copy()
     img.paste(floor, (0, 0), mask)
 
@@ -612,6 +623,7 @@ def render(spec):
     dirs = set(spec['dirs'])
     theme = spec.get('theme', 'simple')
     room = spec.get('room', False)
+    lair = spec.get('lair', False)
 
     floor_base = FLOOR
     mortar = MORTAR
@@ -622,10 +634,11 @@ def render(spec):
         floor_base = (150, 168, 120)
         mortar = (96, 118, 68)
     elif theme == 'dragon':
-        floor_base = (170, 150, 120)
-        mortar = (110, 88, 62)
+        # Dark-red lair stone so dragon chambers clearly stand apart.
+        floor_base = (150, 96, 84)
+        mortar = (92, 52, 46)
 
-    img, mask = base_tile(rnd, dirs, room=room, floor_base=floor_base, mortar=mortar)
+    img, mask = base_tile(rnd, dirs, room=room, lair=lair, floor_base=floor_base, mortar=mortar)
 
     if theme == 'bridge':
         draw_abyss(img, mask, rnd)
@@ -639,9 +652,16 @@ def render(spec):
     elif theme == 'flammable':
         tint_floor(img, mask, (210, 150, 60), 0.12)
     elif theme == 'dragon':
-        tint_floor(img, mask, (120, 60, 30), 0.14)
+        # Strong dark-red wash + a red inner halo so lairs read as "danger".
+        tint_floor(img, mask, (122, 22, 16), 0.32)
+        glow = Image.new("L", (W, H), 0)
+        gd = ImageDraw.Draw(glow)
+        gd.ellipse([VC - 40, HC - 40, VC + 40, HC + 40], fill=90)
+        glow = glow.filter(ImageFilter.GaussianBlur(14))
+        img.paste((150, 20, 12), (0, 0), glow)
 
-    draw_frame(img, dirs)
+    # Tile frame removed for legibility (no golden border nor corner squares).
+    # draw_frame(img, dirs)
 
     # specific decor (offset when several objects, to avoid overlap)
     props = spec.get('props', [])
@@ -754,16 +774,30 @@ def all_specs():
     S.append(dict(name='penumbra-crossroad-1', dirs='NSEW', room=True, theme='penumbra'))
     S.append(dict(name='penumbra-crossroad-2', dirs='NSEW', room=True, theme='penumbra',
                   props=['crystal']))
-    # --- dragon-lair dead-ends (6): a bit of everything (bones, gold, chests, claws...)
-    dprops = [['embers', 'bones'], ['gold', 'chest'], ['claws', 'bones'],
-              ['nest', 'claws'], ['skull', 'gold'], ['chest', 'embers']]
+    # --- dragon lairs: spacious, imperfectly round chambers (dark red).
+    # Decor (chest / bones / gold / skull) is NO LONGER baked in — it is drawn
+    # upright over the tile client-side (see decor-*.png). Only the chamber art
+    # is generated here; the random seed (name) varies each chamber's shape.
     for i in range(1, 7):
-        S.append(dict(name=f'dragon-deadend-{i}', dirs='N', room=True, theme='dragon',
-                      props=dprops[i - 1]))
-    # --- dragon-lair elbows (2)
-    S.append(dict(name='dragon-corner-1', dirs='NE', theme='dragon', props=['gold', 'claws']))
-    S.append(dict(name='dragon-corner-2', dirs='NE', theme='dragon', props=['bones', 'chest']))
+        S.append(dict(name=f'dragon-deadend-{i}', dirs='N', lair=True, theme='dragon'))
+    # Elbows are lairs too: a spacious room with 2 perpendicular exits (NE).
+    S.append(dict(name='dragon-corner-1', dirs='NE', lair=True, theme='dragon'))
+    S.append(dict(name='dragon-corner-2', dirs='NE', lair=True, theme='dragon'))
     return S
+
+
+# --------------------------------------------------------------- decor overlays
+# Standalone, transparent props composited over dragon-lair tiles client-side,
+# always upright (in the correct reading orientation, whatever the tile's
+# rotation). Reuses the same prop drawing centred on the tile.
+DECOR = ['chest', 'bones', 'gold', 'skull']
+
+
+def render_decor(kind):
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    rnd = random.Random(int(hashlib.md5(('decor-' + kind).encode()).hexdigest(), 16) & 0xffffffff)
+    prop(img, kind, rnd, off=(0, 0))
+    return img
 
 
 PREVIEW = ['corridor-1', 'corridor-3', 'corner-1', 't-junction-1', 'crossroad-1',
@@ -779,6 +813,8 @@ def main():
     ap.add_argument('--preview', action='store_true')
     ap.add_argument('--breach', action='store_true',
                     help='(re)generate only the fireball breach overlay')
+    ap.add_argument('--decor', action='store_true',
+                    help='(re)generate only the dragon-lair decor overlays')
     ap.add_argument('--out', default=None)
     args = ap.parse_args()
 
@@ -791,6 +827,14 @@ def main():
         os.makedirs(out, exist_ok=True)
         render_breach().save(os.path.join(out, 'breach.png'))
         print(f"breach.png -> {out}")
+        return
+
+    if args.decor:
+        out = args.out or tiles_dir
+        os.makedirs(out, exist_ok=True)
+        for k in DECOR:
+            render_decor(k).save(os.path.join(out, 'decor-' + k + '.png'))
+        print(f"{len(DECOR)} decor overlays -> {out}")
         return
 
     if args.preview or not args.all:
@@ -806,8 +850,10 @@ def main():
         os.makedirs(out, exist_ok=True)
         for s in specs:
             render(s).save(os.path.join(out, s['name'] + '.png'))
+        for k in DECOR:
+            render_decor(k).save(os.path.join(out, 'decor-' + k + '.png'))
         make_contact_sheet(specs, os.path.join(out, '_contact.png'))
-        print(f"{len(specs)} tuiles -> {out}")
+        print(f"{len(specs)} tuiles + {len(DECOR)} decor -> {out}")
 
 
 def make_contact_sheet(specs, path, cols=8, pad=6, bg=(30, 30, 34)):

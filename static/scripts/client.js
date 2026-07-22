@@ -11,8 +11,9 @@ const STATUS = {
 
 const Lobby = { roomStatus: STATUS.NOT_CONNECTED, inRoom: false, room: null };
 
-// Adventurer portraits: files are named after the character id.
+// Adventurer portraits: <id>.png for small pawns, <id>_portrait.png on cards.
 function portraitUrl(id) { return 'static/assets/adventurers/' + id + '.png'; }
+function portraitCardUrl(id) { return 'static/assets/adventurers/' + id + '_portrait.png'; }
 
 // Short explanation of each difficulty (shown under the buttons).
 const DIFFICULTY_DESC = {
@@ -40,6 +41,10 @@ $(document).ready(() => {
         .then(r => r.json())
         .then(d => $('#version-tag').text(d.version))
         .catch(() => {});
+
+    // Live markdown viewers (rules + changelog).
+    $('#rules-link').on('click', (e) => { e.preventDefault(); Dialog.openMarkdown('rules.md', '📖 Règles du jeu'); });
+    $('#version-link').on('click', () => Dialog.openMarkdown('changelog.md', '📜 Changelog'));
 
     Lobby.$inputs = $('#lobby-inputs');
     Lobby.$roomsList = $('#rooms-list');
@@ -123,6 +128,49 @@ $(document).ready(() => {
             targetId: $(this).data('target')
         });
     });
+
+    // --- Background music ---------------------------------------------------
+    // Preference is shared with the game page via localStorage; default ON
+    // unless the player explicitly muted it earlier.
+    const $audioControl = $('#audio-control');
+    const audio = $('#bg-music')[0];
+    let musicEnabled = localStorage.getItem('de-music') !== 'off';
+
+    const setMusicIcon = (playing) => {
+        $audioControl.find('i')
+            .toggleClass('fa-volume-high', playing)
+            .toggleClass('fa-volume-xmark', !playing);
+    };
+
+    // Autoplay is usually blocked without a prior gesture on this page, so if
+    // play() is refused we start on the first interaction with the lobby.
+    const armGestureFallback = () => {
+        const resume = () => {
+            document.removeEventListener('pointerdown', resume);
+            document.removeEventListener('keydown', resume);
+            if (musicEnabled) audio.play().then(() => setMusicIcon(true)).catch(() => {});
+        };
+        document.addEventListener('pointerdown', resume);
+        document.addEventListener('keydown', resume);
+    };
+
+    $audioControl.click(() => {
+        if (audio.paused) {
+            musicEnabled = true;
+            localStorage.setItem('de-music', 'on');
+            audio.play().then(() => setMusicIcon(true)).catch(() => {});
+        } else {
+            musicEnabled = false;
+            localStorage.setItem('de-music', 'off');
+            audio.pause();
+            setMusicIcon(false);
+        }
+    });
+
+    setMusicIcon(false);
+    if (musicEnabled) {
+        audio.play().then(() => setMusicIcon(true)).catch(() => armGestureFallback());
+    }
 });
 
 // --- Socket events ---------------------------------------------------------
@@ -221,7 +269,7 @@ Socket.on('players-list-changed', (room) => {
             '<li><b>' + a.name + '</b>' + (a.passive ? ' (Passif)' : ' (' + a.cost + ' PA)') + ' — ' + a.description + '</li>').join('');
         const ownerTag = taken ? '<div class="char-owner">Choisi par ' + sel.ownerId + '</div>' : '';
         const card = $('<div class="char-card' + (taken ? ' taken' : '') + (mine ? ' mine' : '') + '" data-char-id="' + c.id + '">' +
-            '<div class="char-portrait" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '"></div>' +
+            '<div class="char-portrait" style="background-image:url(' + portraitCardUrl(c.id) + ');border-color:' + c.color + '"></div>' +
             '<div class="char-name">' + c.name + '</div>' +
             '<div class="char-meta">Niv. ' + c.level + ' · ' + c.maxHp + ' PV</div>' +
             '<ul class="char-abilities">' + abilitiesHtml + '</ul>' + ownerTag + '</div>');
@@ -248,9 +296,9 @@ Socket.on('kicked', (data) => {
 
 Socket.on('emoji', (data) => {
     const $b = $('#wr-emoji-bubble');
-    $b.text(data.from + ' ' + data.emoji).stop(true, true).css('opacity', 1).animate({ opacity: 1 }, 100);
+    $b.html(Dialog.reactionHtml(data.from, data.emoji)).stop(true, true).css('opacity', 1).animate({ opacity: 1 }, 100);
     clearTimeout(Lobby._emojiTimer);
-    Lobby._emojiTimer = setTimeout(() => $b.fadeTo(600, 0, () => $b.text('').css('opacity', 1)), 2500);
+    Lobby._emojiTimer = setTimeout(() => $b.fadeTo(600, 0, () => $b.html('').css('opacity', 1)), 2500);
 });
 
 Socket.on('game-started', () => {

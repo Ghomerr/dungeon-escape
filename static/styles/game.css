@@ -174,6 +174,17 @@ body.in-game { overflow: hidden; }
     transform-origin: center center;
     pointer-events: none;
 }
+/* dragon-lair decor: upright props (chest / bones / gold / skull), never
+   rotated with the tile so they always read the right way up. */
+.tile-decor {
+    position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    background-size: 100% 100%; background-repeat: no-repeat;
+    filter: drop-shadow(0 1px 2px #000a);
+}
+.tile-decor.d1  { transform: scale(.78); }
+.tile-decor.d2a { transform: translate(-16%, 10%) scale(.62); }
+.tile-decor.d2b { transform: translate(16%, -12%) scale(.62); }
+
 /* fireball breach overlay: sits above the base art, below the event veil */
 .tile-breach {
     position: absolute; inset: 0; z-index: 2;
@@ -341,7 +352,12 @@ body.in-game { overflow: hidden; }
 
 /* choice dialog */
 .choice-list { display: flex; flex-direction: column; gap: 6px; }
-.choice-btn { width: 100%; text-align: left; padding: 9px 12px; }
+.choice-btn { width: 100%; text-align: left; padding: 9px 12px; display: flex; align-items: center; gap: 9px; }
+.menu-portrait {
+    width: 30px; height: 30px; border-radius: 50%; object-fit: cover;
+    border: 1px solid var(--border); background: #0004; flex: 0 0 auto;
+}
+.menu-char-name { flex: 1; min-width: 0; }
 
 /* placement dialog */
 .placement-content .hint { margin: 0 0 8px; }
@@ -355,6 +371,36 @@ body.in-game { overflow: hidden; }
     position: absolute; inset: 0;
     background-size: 100% 100%; background-repeat: no-repeat;
     transform-origin: center center;
+}
+
+/* Resource icons (kits / deck / fireballs) */
+.res-ico { width: 18px; text-align: center; color: var(--gold); }
+#fireball-res .res-ico { color: #ff6a3d; }
+
+/* Button that needs an Effort to be afforded : hinted with a subtle outline. */
+.action-btn.needs-effort { border-style: dashed; border-color: var(--gold); opacity: .92; }
+.action-btn.needs-effort .ap-cost::after { content: ' 💪'; }
+
+/* ---- Heal / damage floating feedback over a party card ---- */
+.hp-fx {
+    position: absolute; left: 42%; top: 4px; transform: translateX(-50%);
+    pointer-events: none; z-index: 40; font-size: 1.5rem;
+    text-shadow: 0 1px 3px #000, 0 0 6px currentColor;
+}
+.hp-fx.heal { color: #46d66b; animation: hpfx-heal 1.15s ease-out forwards; }
+.hp-fx.damage { color: #ff4433; animation: hpfx-dmg 1.05s ease-out forwards; }
+@keyframes hpfx-heal {
+    0%   { opacity: 0; transform: translate(-50%, 8px) scale(.6); }
+    18%  { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
+    100% { opacity: 0; transform: translate(-50%, -30px) scale(1); }
+}
+@keyframes hpfx-dmg {
+    0%   { opacity: 0; transform: translate(-50%, 0) scale(.7) rotate(0); }
+    15%  { opacity: 1; transform: translate(-50%, 0) scale(1.15) rotate(-12deg); }
+    30%  { transform: translate(-46%, 0) rotate(12deg); }
+    45%  { transform: translate(-54%, 0) rotate(-9deg); }
+    60%  { transform: translate(-50%, 0) rotate(6deg); }
+    100% { opacity: 0; transform: translate(-50%, 10px) scale(1) rotate(0); }
 }
 
 @media (max-width: 900px) {
