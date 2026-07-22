@@ -580,6 +580,20 @@ function confirmPlacement(room, char, payload) {
     tile.col = p.nc;
     g.board[Utils.cellKey(p.nr, p.nc)] = tile;
 
+    // Inherit a fireball breach from a neighbour that was blasted while this
+    // cell was still empty: if a neighbour opens a breach toward us and we have
+    // no native exit that way, mirror the breach on our facing edge so the
+    // opened passage shows on the new tile too.
+    for (let nd = 0; nd < 4; nd++) {
+        const dd = Tiles.DELTA[nd];
+        const nb = tileAt(g, p.nr + dd.row, p.nc + dd.col);
+        if (!nb || !nb.breaches) continue;
+        if (nb.breaches.includes(Tiles.opposite(nd)) && !tile.exits.includes(nd)) {
+            tile.breaches = tile.breaches || [];
+            if (!tile.breaches.includes(nd)) tile.breaches.push(nd);
+        }
+    }
+
     if (source === 'reserve') g.reserveTile = newReserve;
 
     spendAp(g, p.cost);

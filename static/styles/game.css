@@ -83,7 +83,7 @@ body.in-game { overflow: hidden; }
 .pc-portrait {
     flex: 0 0 34%;
     aspect-ratio: 1 / 1;
-    border-radius: 50%;
+    border-radius: 8px;
     background-size: cover;
     background-position: center;
     border: 2px solid #0006;

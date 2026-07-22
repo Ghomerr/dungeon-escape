@@ -231,7 +231,7 @@ Socket.on('players-list-changed', (room) => {
             .map(s => {
                 const c = room.catalog.find(cc => cc.id === s.charId) || {};
                 return '<span class="wr-pawn" title="' + (c.name || '') + '" style="background-image:url(' +
-                    portraitUrl(s.charId) + ');border-color:' + (c.color || '#000') + '"></span>';
+                    portraitCardUrl(s.charId) + ');border-color:' + (c.color || '#000') + '"></span>';
             }).join('');
         const kick = (isOwner && u.id !== room.owner)
             ? ' <span class="kick-btn" data-target="' + u.id + '" title="Expulser">❌</span>' : '';
@@ -269,7 +269,7 @@ Socket.on('players-list-changed', (room) => {
             '<li><b>' + a.name + '</b>' + (a.passive ? ' (Passif)' : ' (' + a.cost + ' PA)') + ' — ' + a.description + '</li>').join('');
         const ownerTag = taken ? '<div class="char-owner">Choisi par ' + sel.ownerId + '</div>' : '';
         const card = $('<div class="char-card' + (taken ? ' taken' : '') + (mine ? ' mine' : '') + '" data-char-id="' + c.id + '">' +
-            '<div class="char-portrait" style="background-image:url(' + portraitCardUrl(c.id) + ');border-color:' + c.color + '"></div>' +
+            '<div class="char-portrait" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '"></div>' +
             '<div class="char-name">' + c.name + '</div>' +
             '<div class="char-meta">Niv. ' + c.level + ' · ' + c.maxHp + ' PV</div>' +
             '<ul class="char-abilities">' + abilitiesHtml + '</ul>' + ownerTag + '</div>');

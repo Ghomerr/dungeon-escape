@@ -206,7 +206,7 @@ button.primary:hover:not(:disabled) { background: linear-gradient(to bottom, #e0
 .char-card.mine { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold) inset; }
 .char-card.taken:not(.mine) { cursor: not-allowed; }
 .char-portrait {
-    width: 96px; height: 96px; border-radius: 50%;
+    width: 100%; aspect-ratio: 1 / 1; border-radius: 8px;
     background-size: cover; background-position: center;
     border: 3px solid #0006; margin: 0 auto 8px;
     box-shadow: 0 2px 6px #0008;
@@ -259,8 +259,11 @@ footer {
 .end-rank { font-size: 1.6rem; margin: 14px 0; }
 
 /* ---- Clickable footer / header links ---- */
-.music, #version-link { cursor: pointer; }
-#version-link:hover { color: var(--gold-light); }
+/* Music toggle reads as a link (footer) and always shows a hand cursor,
+   including over its ON/OFF icon (in-game header). */
+.music, #version-link { cursor: pointer; color: var(--gold); }
+.music i, #version-link { cursor: pointer; }
+.music:hover, #version-link:hover { color: var(--gold-light); text-decoration: underline; }
 .gh-link { cursor: pointer; color: var(--gold); margin-left: 14px; font-size: .9rem; }
 .gh-link:hover { color: var(--gold-light); }
 

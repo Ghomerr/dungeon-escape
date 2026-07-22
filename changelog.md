@@ -23,15 +23,27 @@ Versions use a calendar scheme: `vYYYY.MM.DD`.
   the action buttons and from board-driven moves.
 - **Heal / damage feedback**: a green rising *heart-circle-plus* on a heal and a
   red shaking *heart-crack* on damage pop over the affected adventurer's card.
-- **New framed portraits** (`*_portrait.png`) on the character cards (lobby +
-  in-game) and in the target-selection menus. Adventurers are no longer
-  designated by emojis anywhere.
+- **New adventurer artwork** used throughout, with a clear split: the **full
+  illustration** on the selection card and the in-game party card, and the
+  round **portrait** on the board pawns and the lobby "assigned" pawns.
+  Adventurers are no longer designated by emojis anywhere (target menus show the
+  portrait).
+
+### Fixed
+- **End-turn crash**: passing / ending the turn threw `state is not defined`.
+  Fixed (and a matching latent crash on the dangerous-move confirmation).
+- **Fireball breach on a later tile**: when the Pyromancer blasted a wall into
+  an empty space, the tile discovered there afterwards now also shows the breach
+  overlay on its facing edge (it was missing).
 
 ### Changed
 - **FontAwesome icons**: action / ability buttons, the turn controls (Effort,
-  End turn, Cancel) and the resource lines (kits, draw pile, fireballs) now use
-  solid FontAwesome icons instead of emojis. Reactions and on-tile event icons
-  keep their emojis.
+  End turn, Cancel), the resource lines (kits, draw pile, fireballs) and the
+  action modals (tile menus, direction picker, placement) now use solid
+  FontAwesome icons instead of emojis. Reactions and on-tile event icons keep
+  their emojis.
+- **Music toggle** now reads as a link and shows a hand cursor over its ON/OFF
+  icon.
 - **Tiles — legibility**: the golden frame and corner ornaments were removed
   from every tile.
 - **Tiles — dragon lairs**: lairs are now spacious, imperfectly round chambers

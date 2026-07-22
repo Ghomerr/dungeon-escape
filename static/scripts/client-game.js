@@ -181,9 +181,10 @@ $(document).ready(() => {
 
     $('#endturn-btn').click(() => {
         // Warn before ending the turn while action points are still available.
+        const state = Game.state;
         if (isMyTurn() && state && state.ap > 0) {
             const ac = activeChar();
-            Dialog.openTwoChoicesDialog($('#simple-dialog'), '⏭️ Terminer le tour',
+            Dialog.openTwoChoicesDialog($('#simple-dialog'), 'Terminer le tour',
                 'Il reste encore <b>' + state.ap + ' PA</b>' + (state.freeMoves ? ' (+' + state.freeMoves + ' dépl.)' : '') +
                 ' à ' + escapeHtml(ac ? ac.name : 'cet aventurier') + '. Terminer le tour quand même ?',
                 'Terminer le tour', () => sendAction('end-turn', {}), 'Continuer à jouer', null);
@@ -306,13 +307,13 @@ Socket.on('game-error', (data) => {
     // by clicking an adjacent tile, etc.): offer an Effort then replay it.
     if (data.error === 'no-ap' && canEffort() && Game._lastAction && Game._lastAction.action !== 'effort') {
         const la = Game._lastAction;
-        Dialog.openTwoChoicesDialog($('#simple-dialog'), '💪 Pas assez de PA',
+        Dialog.openTwoChoicesDialog($('#simple-dialog'), 'Pas assez de PA',
             'Il ne reste que <b>' + Game.state.ap + ' PA</b>.<br>Faire un <b>Effort</b> (+1 PA, jet de talent en fin de tour) puis relancer l\'action ?',
-            '💪 Effort + action', () => { sendAction('effort', {}); sendAction(la.action, la.payload); },
+            'Effort + action', () => { sendAction('effort', {}); sendAction(la.action, la.payload); },
             'Annuler', null);
         return;
     }
-    if (data.error && M[data.error]) Dialog.openSimpleDialog($('#simple-dialog'), '⛔ Action impossible', M[data.error]);
+    if (data.error && M[data.error]) Dialog.openSimpleDialog($('#simple-dialog'), 'Action impossible', M[data.error]);
 });
 
 Socket.on('emoji', (data) => {
@@ -339,7 +340,7 @@ function canEffort() {
     return isMyTurn() && ac && ac.conscious && s && !s.effortUsed && !s.pending;
 }
 function offerEffortThen(label, cost, runFn) {
-    Dialog.openTwoChoicesDialog($('#simple-dialog'), '💪 Pas assez de PA',
+    Dialog.openTwoChoicesDialog($('#simple-dialog'), 'Pas assez de PA',
         '<b>' + escapeHtml(label) + '</b> coûte <b>' + cost + ' PA</b>, mais il ne reste que <b>' + Game.state.ap +
         ' PA</b>.<br>Faire un <b>Effort</b> (+1 PA, jet de talent en fin de tour) puis lancer l\'action ?',
         '💪 Effort + action', () => { sendAction('effort', {}); runFn(); },
@@ -468,6 +469,7 @@ function showTileDesc(tile) {
 function moveDangerWarnings(tile, ac) {
     const warns = [];
     const immune = ac.abilities && ac.abilities.some(a => a.id === 'stealth');
+    const state = Game.state;
     if (!immune && state.dragons && state.dragons.some(d => d.row === tile.row && d.col === tile.col)) {
         warns.push('🐉 Un <b>Dragon</b> occupe cette tuile : ' + escapeHtml(ac.name) + ' sera <b>terrassé</b> (0 PV, inconscient).');
     }
@@ -487,7 +489,7 @@ function moveWithConfirm(tile, ac, doIt) {
     if (!warns.length) { doIt(); return; }
     const body = escapeHtml(ac.name) + ' va entrer sur cette tuile :' +
         '<ul><li>' + warns.join('</li><li>') + '</li></ul>Confirmer le déplacement ?';
-    Dialog.openTwoChoicesDialog($('#simple-dialog'), '⚠️ Déplacement dangereux', body,
+    Dialog.openTwoChoicesDialog($('#simple-dialog'), 'Déplacement dangereux', body,
         'Se déplacer quand même', doIt, 'Annuler', null);
 }
 
@@ -504,8 +506,8 @@ function onTileClick(tile) {
     const canPickHere = here.doorLocked;
 
     if (dir === 'here') {
-        if (tile.state === 'fire') items.push({ label: '🧯 Éteindre l\'incendie (2 PA)', fn: () => sendAction('extinguish', {}) });
-        if (canPickHere) items.push({ label: '🗝️ Crocheter la porte (2 PA)', fn: () => sendAction('pick-lock', {}) });
+        if (tile.state === 'fire') items.push({ label: ACTION_ICON['extinguish'] + ' Éteindre l\'incendie (2 PA)', fn: () => sendAction('extinguish', {}) });
+        if (canPickHere) items.push({ label: ACTION_ICON['pick-lock'] + ' Crocheter la porte (2 PA)', fn: () => sendAction('pick-lock', {}) });
     } else if (dir !== null) {
         const connected = edgeConnected(here, dir, tile);
         // Our own door blocks leaving this way : offer to pick it (from here).
@@ -513,17 +515,17 @@ function onTileClick(tile) {
         const sameAxisExit = tileOpensToward(here, dir) && tileOpensToward(tile, OPP(dir));
 
         if (tile.state === 'fire') {
-            items.push({ label: '🧯 Éteindre l\'incendie (2 PA)', fn: () => sendAction('extinguish', { dir }) });
-            if (ac.abilities.some(a => a.id === 'elven-agility')) items.push({ label: '🤸 Entrer (Agilité elfique, 1 PA)', fn: () => moveWithConfirm(tile, ac, () => sendAction('move', { dir })) });
+            items.push({ label: ACTION_ICON['extinguish'] + ' Éteindre l\'incendie (2 PA)', fn: () => sendAction('extinguish', { dir }) });
+            if (ac.abilities.some(a => a.id === 'elven-agility')) items.push({ label: ABILITY_ICON['elven-agility'] + ' Entrer (Agilité elfique, 1 PA)', fn: () => moveWithConfirm(tile, ac, () => sendAction('move', { dir })) });
         } else if (tile.kind === 'bridge' && connected) {
-            items.push({ label: '🌉 Marcher en équilibre (2 PA)', fn: () => sendAction('walk-bridge', { dir }) });
+            items.push({ label: ACTION_ICON['walk-bridge'] + ' Marcher en équilibre (2 PA)', fn: () => sendAction('walk-bridge', { dir }) });
         } else if (tile.state === 'dark' && sameAxisExit) {
-            if (ac.abilities.some(a => a.id === 'night-vision')) items.push({ label: '👣 Se déplacer (Vision nocturne)', fn: () => moveWithConfirm(tile, ac, () => sendAction('move', { dir })) });
-            else items.push({ label: '🌑 Marcher dans l\'Obscurité (2 PA)', fn: () => sendAction('walk-dark', { dir }) });
+            if (ac.abilities.some(a => a.id === 'night-vision')) items.push({ label: ACTION_ICON['move'] + ' Se déplacer (Vision nocturne)', fn: () => moveWithConfirm(tile, ac, () => sendAction('move', { dir })) });
+            else items.push({ label: ACTION_ICON['walk-dark'] + ' Marcher dans l\'Obscurité (2 PA)', fn: () => sendAction('walk-dark', { dir }) });
         } else if (connected) {
-            items.push({ label: '👣 Se déplacer ici (1 PA)', fn: () => moveWithConfirm(tile, ac, () => sendAction('move', { dir })) });
+            items.push({ label: ACTION_ICON['move'] + ' Se déplacer ici (1 PA)', fn: () => moveWithConfirm(tile, ac, () => sendAction('move', { dir })) });
         }
-        if (blockedByOwnDoor) items.push({ label: '🗝️ Crocheter la porte qui bloque ce passage (2 PA)', fn: () => sendAction('pick-lock', {}) });
+        if (blockedByOwnDoor) items.push({ label: ACTION_ICON['pick-lock'] + ' Crocheter la porte qui bloque ce passage (2 PA)', fn: () => sendAction('pick-lock', {}) });
     }
 
     // The description is already shown permanently (#tile-desc panel), so the
@@ -538,8 +540,8 @@ function onGhostClick(row, col, dir) {
     const ac = activeChar();
     if (!ac || !ac.conscious) return;
     openMenu('Emplacement à explorer', [
-        { label: '🧭 Explorer (découvrir + entrer, 1 PA)', fn: () => sendAction('explore', { dir }) },
-        { label: '🧱 Découvrir (placer la tuile, 1 PA)', fn: () => sendAction('discover', { dir }) }
+        { label: ACTION_ICON['explore'] + ' Explorer (découvrir + entrer, 1 PA)', fn: () => sendAction('explore', { dir }) },
+        { label: ACTION_ICON['discover'] + ' Découvrir (placer la tuile, 1 PA)', fn: () => sendAction('discover', { dir }) }
     ]);
 }
 
@@ -689,7 +691,7 @@ function renderParty(state) {
               (state.freeMoves ? ' <span class="pc-free">(+' + state.freeMoves + ' dépl.)</span>' : '') + '</div>'
             : '';
         $list.append('<div class="party-card' + active + '" data-cid="' + c.id + '" title="' + abilitiesTip(c) + '" style="border-color:' + c.color + '">' + arrow +
-            '<div class="pc-portrait" style="background-image:url(' + portraitCardUrl(c.id) + ');border-color:' + c.color + '"></div>' +
+            '<div class="pc-portrait" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '"></div>' +
             '<div class="pc-info">' +
             '<div class="pc-name-row"><span class="pc-name">' + c.name + '</span>' +
             '<span class="pc-level" title="Niveau — les dragons ciblent en priorité le niveau le plus bas">Niv. ' + c.level + '</span>' +
@@ -830,7 +832,7 @@ function renderBoard(state) {
                 if (state.effortUsed) activeCls += ' aura-overreach';
                 if (state.ap <= 0) activeCls += ' aura-empty';
             }
-            const $tok = $('<span class="token char-token' + koCls + activeCls + '" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '" title="' + c.name + ' (' + c.hp + '/' + c.maxHp + ')"></span>');
+            const $tok = $('<span class="token char-token' + koCls + activeCls + '" style="background-image:url(' + portraitCardUrl(c.id) + ');border-color:' + c.color + '" title="' + c.name + ' (' + c.hp + '/' + c.maxHp + ')"></span>');
             $tile.append($tok);
             animateIfMoved($tok, $tile, 'c' + c.id, c.row, c.col, prevPos, curPos);
         });
@@ -902,7 +904,7 @@ function renderPlacement(state) {
     p.candidates.forEach(cand => {
         const info = TILE_INFO[cand.kind] || { label: cand.kind, icon: '' };
         const $block = $('<div class="placement-candidate"></div>');
-        $block.append('<div class="cand-title">' + (cand.source === 'reserve' ? '🪨 Réserve : ' : 'Pioche : ') + info.icon + ' ' + info.label +
+        $block.append('<div class="cand-title">' + (cand.source === 'reserve' ? ABILITY_ICON['rock-memory'] + ' Réserve : ' : 'Pioche : ') + info.icon + ' ' + info.label +
             (cand.fireValues ? ' (dés ' + cand.fireValues.join('·') + ')' : '') + '</div>');
         const $opts = $('<div class="orient-options"></div>');
         cand.orientations.forEach((o, i) => {
@@ -916,9 +918,9 @@ function renderPlacement(state) {
     });
 
     const buttons = [];
-    if (p.canReroll) buttons.push({ text: '🔄 Repli stratégique (' + p.mulliganLeft + ')', click: () => sendAction('reroll-placement', {}) });
+    if (p.canReroll) buttons.push({ text: 'Repli stratégique (' + p.mulliganLeft + ')', click: () => sendAction('reroll-placement', {}) });
     buttons.push({ text: 'Annuler', click: () => { $d.dialog('close'); sendAction('cancel-placement', {}); } });
-    $d.dialog('option', 'title', '🧭 ' + modeLabel + ' une tuile');
+    $d.dialog('option', 'title', modeLabel + ' une tuile');
     $d.dialog('option', 'buttons', buttons);
     if (!$d.dialog('isOpen')) $d.dialog('open');
 }
