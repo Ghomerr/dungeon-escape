@@ -3,6 +3,53 @@
 All notable changes to Dungeon Escape are documented here.
 Versions use a calendar scheme: `vYYYY.MM.DD`.
 
+## v2026.07.26
+
+### Added
+- **Installable PWA**: Dungeon Escape can now be installed to the home screen /
+  desktop. Adds a web manifest, dungeon-themed icons (192 / 512, maskable) and a
+  service worker that caches the static shell (real-time socket traffic is never
+  intercepted). The service worker is served from the site root so its scope
+  covers the whole app.
+- **Mobile-first responsive layout**: the whole game now adapts from phone to
+  desktop.
+  - **Lobby**: slimmer header, icon-only footer, and a compact waiting room whose
+    room recap (players / difficulty / emojis) stays fixed while the character
+    list scrolls under it — with smaller cards showing at least two per row.
+  - **Game**: two narrow icon rails around a centred board on phones; the board
+    uses the full width on desktop (no more 1100px side gutters).
+- **Manual compact / detailed toggle** for each side rail (double-arrow buttons):
+  detailed by default on desktop (action names, full adventurer cards), compact
+  (icons only) on phones. The choice is remembered per rail.
+- **Round action buttons** (compact mode): each action is an icon in a circle
+  with small yellow lightning pips showing its action-point cost; the name and
+  description live in the tooltip.
+- **Journal modal + live toasts**: the log moved into a modal (opened from a
+  Journal button, with an unread badge), and every new log line also pops as a
+  toast at the bottom of the screen — on both mobile and desktop.
+- **Adventurer details on tap**: tapping a party card opens a modal with the
+  adventurer's stats and abilities (the hover tooltip is unreachable on touch).
+- **Full-screen in-game modals on phones**: questions, direction picker and tile
+  orientation dialogs go full-screen on small viewports for readability.
+
+### Changed
+- **Compact side rails on phones** show only the essentials: adventurer portrait
+  + HP + action-point pips (with the active-player arrow), a colour-coded event
+  picto (emoji + name, details in a modal), and icon-only resources.
+- **Event zone is always visible** (even when nothing is happening): full inline
+  detail on desktop, emoji + name → modal on phones.
+- **Header** is leaner on phones: turns-left shows a picto + number (full
+  "Tours restants" text on desktop) and the turn info keeps only the active
+  adventurer's name.
+- **Fireball counter** now shows just the number, like the kits and draw pile.
+- **Journal and emoji buttons** moved to the left rail to shorten the actions
+  rail; the emoji bar is now a floating popover.
+
+### Fixed
+- **Side rails now scroll** when the screen is too short: the rails were growing
+  the page instead of scrolling internally, which made their tops unreachable.
+- **Emoji button** no longer opens an invisible empty zone at the bottom.
+
 ## v2026.07.22
 
 ### Added

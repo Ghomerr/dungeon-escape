@@ -4,8 +4,17 @@
 <head>
     <meta charset="utf-8" />
     <title>Dungeon Escape - Partie</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <link rel="icon" href="static/assets/favicon.svg" />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#241a10" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Dungeon Escape" />
+    <link rel="apple-touch-icon" href="/static/assets/icons/icon-192.png" />
     <link rel="stylesheet" href="https://code.jquery.com/ui/1.14.1/themes/smoothness/jquery-ui.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="static/styles/main.css">
@@ -20,6 +29,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="static/scripts/dialog.js"></script>
     <script src="static/scripts/client-game.js"></script>
+    <script src="static/scripts/pwa.js"></script>
 </head>
 
 <body class="dungeon-escape in-game">
@@ -50,10 +60,10 @@
 
     <header class="game-header">
         <div class="gh-left">
-            <span class="gh-title"><i class="fas fa-dungeon"></i> Dungeon Escape</span>
-            <span class="music" id="audio-control">Musique <i class="fas fa-volume-xmark"></i></span>
-            <span class="gh-link" id="rules-link" title="Règles du jeu"><i class="fas fa-book"></i> Règles</span>
-            <span class="gh-link" id="changelog-link" title="Nouveautés / changelog"><i class="fas fa-scroll"></i> Changelog</span>
+            <span class="gh-title" title="Dungeon Escape"><i class="fas fa-dungeon"></i><span class="gh-title-lbl"> Dungeon Escape</span></span>
+            <span class="music" id="audio-control" title="Musique"><span class="lbl">Musique </span><i class="fas fa-volume-xmark"></i></span>
+            <span class="gh-link" id="rules-link" title="Règles du jeu"><i class="fas fa-book"></i><span class="gh-link-lbl"> Règles</span></span>
+            <span class="gh-link" id="changelog-link" title="Nouveautés / changelog"><i class="fas fa-scroll"></i><span class="gh-link-lbl"> Changelog</span></span>
         </div>
         <div class="gh-center">
             <span id="turn-info" class="turn-info"></span>
@@ -65,21 +75,37 @@
     </header>
 
     <main class="game-main">
-        <!-- Left: party + event -->
-        <aside class="party-panel">
-            <h3>Aventuriers</h3>
+        <!-- Left rail: party (portrait + HP + AP) + event picto + resources -->
+        <aside class="party-panel rail">
+            <button id="party-toggle" class="rail-toggle" title="Afficher / réduire les détails des personnages"><i class="fas fa-angles-right"></i></button>
+            <h3 class="rail-h3">Aventuriers</h3>
             <div id="party-list"></div>
 
             <div id="event-box" class="event-box">
-                <h3>Événement</h3>
-                <div id="event-content" class="event-content">Aucun</div>
+                <h3 class="rail-h3">Événement</h3>
+                <div id="event-inline" class="event-inline"></div>
             </div>
 
             <div class="resources">
-                <div><i class="fas fa-key res-ico" title="Kits de crochetage"></i> Kits : <span id="kit-count">-</span></div>
-                <div><i class="fas fa-layer-group res-ico" title="Pioche"></i> Pioche : <span id="deck-count">-</span></div>
-                <div id="fireball-res" style="display:none;"><i class="fas fa-fire res-ico" title="Boules de feu du Pyromancien"></i> Boules de feu : <span id="fireball-count">-</span></div>
+                <span class="res" id="kit-res" title="Kits de crochetage"><i class="fas fa-key res-ico"></i><b id="kit-count">-</b><span class="res-lbl">Kits</span></span>
+                <span class="res" id="deck-res" title="Pioche"><i class="fas fa-layer-group res-ico"></i><b id="deck-count">-</b><span class="res-lbl">Pioche</span></span>
+                <span class="res" id="fireball-res" style="display:none;" title="Boules de feu du Pyromancien"><i class="fas fa-fire res-ico"></i><b id="fireball-count">-</b><span class="res-lbl">Boules de feu</span></span>
             </div>
+
+            <div class="rail-sep"></div>
+            <div class="rail-extra">
+                <button id="journal-btn" class="round-act" title="Journal de la partie"><span class="act-ico"><i class="fas fa-scroll"></i></span><span class="act-lbl">Journal</span><span class="journal-badge" id="journal-badge" style="display:none;"></span></button>
+                <button id="emoji-toggle-btn" class="round-act" title="Envoyer un emoji"><span class="act-ico"><i class="fas fa-face-smile"></i></span><span class="act-lbl">Emoji</span></button>
+            </div>
+            <div class="emoji-bar" id="game-emoji-bar">
+                <button class="emoji-send" data-emoji="👍">👍</button>
+                <button class="emoji-send" data-emoji="😂">😂</button>
+                <button class="emoji-send" data-emoji="🔥">🔥</button>
+                <button class="emoji-send" data-emoji="😱">😱</button>
+                <button class="emoji-send" data-emoji="🐉">🐉</button>
+                <button class="emoji-send" data-emoji="❤️">❤️</button>
+            </div>
+            <div id="game-emoji-bubble" class="emoji-bubble"></div>
         </aside>
 
         <!-- Center: dungeon board -->
@@ -90,42 +116,47 @@
             <div class="board-hint" id="board-hint">Cliquez sur une tuile adjacente pour interagir, ou choisissez une direction.</div>
         </section>
 
-        <!-- Right: actions + log -->
-        <aside class="actions-panel">
-            <div class="active-banner" id="active-banner"></div>
+        <!-- Right rail: round action pictos + turn controls + journal -->
+        <aside class="actions-panel rail">
+            <button id="actions-toggle" class="rail-toggle" title="Afficher / réduire les noms des actions"><i class="fas fa-angles-left"></i></button>
+            <div class="active-banner" id="active-banner" title=""></div>
 
-            <div id="tile-desc" class="tile-desc tile-desc-empty">
-                <span class="td-hint">Cliquez une tuile pour voir sa description.</span>
-            </div>
-
-            <h3>Actions de base</h3>
-            <div id="base-actions" class="action-buttons"></div>
-
-            <h3>Actions Donjon</h3>
-            <div id="dungeon-actions" class="action-buttons"></div>
-
-            <h3>Capacités <span id="active-char-name"></span></h3>
-            <div id="ability-actions" class="action-buttons"></div>
+            <h3 class="rail-h3">Actions de base</h3>
+            <div id="base-actions" class="action-rail"></div>
+            <h3 class="rail-h3">Actions Donjon</h3>
+            <div id="dungeon-actions" class="action-rail"></div>
+            <h3 class="rail-h3">Capacités <span id="active-char-name"></span></h3>
+            <div id="ability-actions" class="action-rail"></div>
 
             <div class="turn-controls">
-                <button id="effort-btn" class="action-btn" title="Effort : +1 PA, jet de talent en fin de tour"><i class="fas fa-dumbbell"></i> Effort</button>
-                <button id="endturn-btn" class="action-btn primary"><i class="fas fa-forward-step"></i> Finir le tour</button>
+                <button id="effort-btn" class="round-act" title="Effort : +1 PA, jet de talent en fin de tour"><span class="act-ico"><i class="fas fa-dumbbell"></i></span><span class="act-lbl">Effort</span></button>
+                <button id="endturn-btn" class="round-act primary" title="Finir le tour"><span class="act-ico"><i class="fas fa-forward-step"></i></span><span class="act-lbl">Finir le tour</span></button>
             </div>
-
-            <div class="emoji-bar" id="game-emoji-bar">
-                <button class="emoji-send" data-emoji="👍">👍</button>
-                <button class="emoji-send" data-emoji="😂">😂</button>
-                <button class="emoji-send" data-emoji="🔥">🔥</button>
-                <button class="emoji-send" data-emoji="😱">😱</button>
-                <button class="emoji-send" data-emoji="🐉">🐉</button>
-                <button class="emoji-send" data-emoji="❤️">❤️</button>
-            </div>
-            <div id="game-emoji-bubble" class="emoji-bubble"></div>
-
-            <h3>Journal</h3>
-            <div id="log" class="log"></div>
         </aside>
+
+        <!-- Tile description shown as a floating panel over the board (toggled). -->
+        <div id="tile-desc" class="tile-desc tile-desc-empty" style="display:none;">
+            <span class="td-hint">Cliquez une tuile pour voir sa description.</span>
+        </div>
     </main>
+
+    <!-- Journal log toasts (bottom of screen, both mobile and desktop) -->
+    <div id="log-toast" class="log-toast"></div>
+
+    <!-- Journal modal -->
+    <div id="log-dialog" title="Journal de la partie" style="display:none;">
+        <div id="log" class="log"></div>
+    </div>
+
+    <!-- Event details modal -->
+    <div id="event-dialog" title="Événement" style="display:none;">
+        <div class="event-content" id="event-content">Aucun</div>
+    </div>
+
+    <!-- Character details modal (abilities), opened by tapping a party card -->
+    <div id="char-dialog" title="Personnage" style="display:none;">
+        <div class="char-detail" id="char-detail"></div>
+    </div>
 
     <div id="simple-dialog" title="Message">
         <div class="dialog-text"></div>

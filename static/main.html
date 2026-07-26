@@ -4,8 +4,17 @@
 <head>
     <meta charset="utf-8" />
     <title>Dungeon Escape - Accueil</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link rel="icon" href="static/assets/favicon.svg" />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#241a10" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Dungeon Escape" />
+    <link rel="apple-touch-icon" href="/static/assets/icons/icon-192.png" />
     <link rel="stylesheet" href="https://code.jquery.com/ui/1.14.1/themes/smoothness/jquery-ui.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="static/styles/main.css">
@@ -19,6 +28,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="static/scripts/dialog.js"></script>
     <script src="static/scripts/client.js"></script>
+    <script src="static/scripts/pwa.js"></script>
 </head>
 
 <body class="dungeon-escape">
@@ -127,16 +137,13 @@
         </div>
     </main>
 
-    <footer id="footer">
+    <footer id="footer" class="icon-footer">
         <span id="debug-button" title="Debug"></span>
-        <span><i class="fas fa-dragon"></i></span>
-        <span class="version" id="version-link" title="Voir le changelog">Dungeon Escape <span id="version-tag"></span></span>
-        <span class="sep">—</span>
-        <span class="music" id="audio-control">Musique <i class="fas fa-volume-xmark"></i></span>
-        <span class="sep">—</span>
-        <span class="rules"><a href="#" id="rules-link"><i class="fas fa-book"></i> Règles du jeu</a></span>
-        <span class="sep">—</span>
-        <span class="twitter"><a href="https://twitter.com/Ghomerr" target="_blank"><i class="fab fa-twitter"></i> @Ghomerr</a></span>
+        <span class="foot-ico"><i class="fas fa-dragon"></i></span>
+        <span class="foot-ico version" id="version-link" title="Voir le changelog"><i class="fas fa-circle-info"></i><span class="lbl"> Dungeon Escape <span id="version-tag"></span></span></span>
+        <span class="foot-ico music" id="audio-control" title="Musique"><i class="fas fa-volume-xmark"></i><span class="lbl"> Musique</span></span>
+        <span class="foot-ico rules"><a href="#" id="rules-link" title="Règles du jeu"><i class="fas fa-book"></i><span class="lbl"> Règles du jeu</span></a></span>
+        <span class="foot-ico twitter"><a href="https://twitter.com/Ghomerr" target="_blank" title="@Ghomerr"><i class="fab fa-twitter"></i><span class="lbl"> @Ghomerr</span></a></span>
     </footer>
 </body>
 

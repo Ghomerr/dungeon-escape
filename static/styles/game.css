@@ -1,20 +1,45 @@
-body.in-game { overflow: hidden; }
+/* Lock the game to the viewport height so the two side rails scroll internally
+   instead of growing the page (which made their tops unreachable). */
+body.in-game { height: 100dvh; overflow: hidden; }
 
 .game-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
     background: linear-gradient(to bottom, #3a2a16, #241a10);
     border-bottom: 2px solid var(--border);
-    padding: 8px 16px;
+    padding: 6px 12px;
 }
-.gh-title { color: var(--gold); font-weight: bold; font-size: 1.1rem; }
-.turn-info { color: var(--gold-light); font-weight: bold; }
-.turns-left { color: var(--muted); }
+.gh-left, .gh-right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.gh-center { flex: 1; min-width: 0; text-align: center; }
+.gh-title { color: var(--gold); font-weight: bold; font-size: 1.05rem; white-space: nowrap; }
+.turn-info {
+    color: var(--gold-light); font-weight: bold; font-size: .85rem;
+    display: inline-block; max-width: 100%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;
+}
+.turns-left { color: var(--muted); white-space: nowrap; }
+.turns-left .tl-ico { display: none; }
 .turns-left .sudden { color: var(--accent); font-weight: bold; }
 .dragon-marker {
     background: #5a1d12; color: #ffd; padding: 3px 10px; border-radius: 14px;
-    margin-right: 10px; font-weight: bold;
+    font-weight: bold; white-space: nowrap;
+}
+
+/* Compact header on phones: drop the title label + music word, keep pictos, and
+   in the centre keep only the active adventurer's name (round + AP hidden). */
+@media (max-width: 760px) {
+    .gh-title .gh-title-lbl { display: none; }
+    .game-header .music .lbl { display: none; }
+    .gh-link .gh-link-lbl { display: none; }
+    .gh-left, .gh-right { gap: 4px; }
+    .gh-link { margin-left: 6px; }
+    .turn-info { font-size: .78rem; }
+    .turn-info .ti-round, .turn-info .ti-extra { display: none; }
+    .turns-left .tl-ico { display: inline; }
+    .turns-left .tl-lbl { display: none; }
+    .dragon-marker { padding: 2px 6px; font-size: .72rem; }
 }
 
 /* ---- Central bad-event toast ---- */
@@ -47,21 +72,48 @@ body.in-game { overflow: hidden; }
     100% { transform: translate(-50%, -50%) scale(1); }
 }
 
-/* ---- 3-column game layout ---- */
+/* ---- 3-column game layout : two narrow icon rails + centred board ---- */
 .game-main {
     display: grid;
-    grid-template-columns: 232px 1fr 286px;
-    gap: 10px;
-    padding: 10px;
-    height: calc(100vh - 52px);
+    grid-template-columns: var(--rail-left) 1fr var(--rail-right);
+    gap: 6px;
+    padding: 6px;
+    /* Fill the space left by the header; min-height:0 lets the rails scroll
+       inside instead of stretching the page to fit their content. */
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    /* Full-bleed: use the whole width, no centered 1100px cap / side gutters. */
+    max-width: none;
+    width: 100%;
+    margin: 0;
 }
+:root { --rail-left: 76px; --rail-right: 64px; --header-h: 50px; }
+
 .party-panel, .actions-panel {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 10px 12px;
     overflow-y: auto;
+    overflow-x: hidden;
+    /* Grid items default to min-height:auto, which lets tall content overflow the
+       cell instead of scrolling (the top then becomes unreachable). Forcing 0
+       makes overflow-y:auto actually scroll. */
+    min-height: 0;
 }
+/* Icon rails: tight padding, centred content column. */
+.rail {
+    padding: 6px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    scrollbar-width: thin;
+}
+/* Rail children keep their size (no shrinking) so overflow scrolls cleanly. */
+.rail > * { flex-shrink: 0; }
+.rail::-webkit-scrollbar { width: 5px; }
+.rail::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 .party-panel h3, .actions-panel h3 {
     color: var(--gold);
     margin: 12px 0 8px;
@@ -71,70 +123,117 @@ body.in-game { overflow: hidden; }
 }
 .party-panel h3:first-child { margin-top: 0; }
 
-/* ---- Party cards ---- */
+#party-list { width: 100%; display: flex; flex-direction: column; gap: 5px; }
+.rail-sep { width: 70%; height: 1px; background: var(--border); opacity: .5; margin: 2px 0; flex: 0 0 auto; }
+.action-rail { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+
+/* ---- Party cards (compact rail: portrait + HP + AP only) ---- */
 .party-card {
     position: relative;
+    width: 100%;
     border: 1px solid var(--border);
-    border-left-width: 4px;
-    border-radius: 6px;
-    padding: 7px 9px;
-    margin-bottom: 7px;
+    border-radius: 8px;
+    padding: 5px 4px 6px;
     background: var(--panel2);
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 9px;
+    gap: 3px;
 }
 .pc-portrait {
-    flex: 0 0 34%;
+    position: relative;
+    width: 100%; max-width: 56px;
     aspect-ratio: 1 / 1;
-    border-radius: 8px;
+    border-radius: 50%;
     background-size: cover;
     background-position: center;
     border: 2px solid #0006;
     box-shadow: 0 1px 3px #000;
 }
-.pc-info { flex: 1; min-width: 0; }
-.pc-name-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* Status badge over the portrait corner (no text label). */
+.pc-status {
+    position: absolute; right: -3px; bottom: -3px;
+    width: 18px; height: 18px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .62rem; color: #fff; border: 1px solid #0008;
+    box-shadow: 0 1px 2px #000;
+}
+.pc-status.st-escaped { background: #2c5e2c; }
+.pc-status.st-dead { background: #4a1010; }
+.pc-status.st-ko { background: #7a5e14; }
+.pc-status.st-hidden { background: #2a2a4a; }
 .party-card.active { box-shadow: 0 0 0 2px var(--gold); background: #3a2e18; }
 .active-arrow {
     position: absolute;
-    left: -11px;
-    top: 50%;
+    left: -8px;
+    top: 26px;
     transform: translateY(-50%);
     width: 0; height: 0;
-    border-top: 8px solid transparent;
-    border-bottom: 8px solid transparent;
-    border-left: 11px solid var(--gold);
+    border-top: 7px solid transparent;
+    border-bottom: 7px solid transparent;
+    border-left: 9px solid var(--gold);
     filter: drop-shadow(0 0 2px #000);
     animation: arrowpulse 1s ease-in-out infinite;
+    z-index: 2;
 }
-@keyframes arrowpulse { 0%, 100% { left: -11px; } 50% { left: -6px; } }
-.pc-top { display: flex; align-items: center; gap: 6px; }
-.pc-emoji { font-size: 1.2rem; }
-.pc-name { font-weight: bold; color: var(--gold-light); flex: 1; }
-.pc-hp { font-size: .8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-/* Small level badge (dragons target the lowest level first). */
-.pc-level {
-    font-size: .66rem; font-weight: bold; color: var(--gold);
-    background: #0003; border: 1px solid var(--border);
-    border-radius: 8px; padding: 0 6px; white-space: nowrap;
-}
-/* Action points of the active adventurer, shown like the HP line. */
-.pc-ap { font-size: .8rem; color: var(--gold-light); font-weight: bold; margin-top: 3px; }
-.pc-ap .pc-free { color: var(--muted); font-weight: normal; }
-.pc-owner { font-size: .72rem; color: var(--muted); margin-top: 2px; }
-.hp-bar { flex: 1; height: 7px; background: #3a1a14; border-radius: 4px; overflow: hidden; }
-.hp-fill { height: 100%; background: linear-gradient(to right, #4f8f4a, #84c46f); }
-.tag {
-    font-size: .7rem; padding: 1px 6px; border-radius: 10px; font-weight: bold;
-}
-.tag.escaped { background: #2c5e2c; color: #cfe; }
-.tag.dead { background: #4a1010; color: #fbb; }
-.tag.ko { background: #5a4a14; color: #ffe; }
-.tag.hidden { background: #2a2a4a; color: #cce; }
+@keyframes arrowpulse { 0%, 100% { left: -8px; } 50% { left: -3px; } }
 
-.event-box { margin-top: 8px; }
+.pc-hp { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.pc-hp-num { font-size: .68rem; color: var(--gold-light); font-weight: bold; line-height: 1; }
+.hp-bar { width: 100%; height: 5px; background: #3a1a14; border-radius: 4px; overflow: hidden; }
+.hp-fill { height: 100%; background: linear-gradient(to right, #4f8f4a, #84c46f); }
+
+/* Action points as yellow lightning pips (active adventurer only). */
+.pc-ap {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+    gap: 1px; line-height: 1; color: #ffd23f; font-size: .62rem; max-width: 100%;
+}
+.pc-ap .fa-bolt { filter: drop-shadow(0 0 1px #a76b00); }
+.pc-ap .pc-free { color: var(--muted); font-weight: bold; margin-left: 2px; }
+
+/* ---- Event zone (left rail) ---- */
+.event-box { width: 100%; display: flex; flex-direction: column; align-items: stretch; }
+.event-inline { width: 100%; }
+/* Compact (mobile): "Aucun événement" muted, or a clickable emoji + name chip. */
+.event-inline .muted { display: block; text-align: center; font-size: .68rem; padding: 3px 2px; }
+.event-inline.has-event {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 5px 3px; border-radius: 8px;
+    background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--ev-color, #333) 55%, #000), #1a140d);
+    border: 1px solid color-mix(in srgb, var(--ev-color, #333) 80%, #fff 20%);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--ev-color, #333) 55%, transparent);
+    animation: ev-pulse 1.8s ease-in-out infinite;
+}
+@keyframes ev-pulse { 0%, 100% { box-shadow: 0 0 6px color-mix(in srgb, var(--ev-color, #333) 45%, transparent); } 50% { box-shadow: 0 0 13px color-mix(in srgb, var(--ev-color, #333) 70%, transparent); } }
+.event-inline.clickable { cursor: pointer; }
+.event-inline .ev-emoji { font-size: 1.4rem; line-height: 1; }
+.event-inline .ev-mini-img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #0006; }
+.event-inline .ev-name { font-size: .62rem; color: #fff; text-align: center; font-weight: bold; line-height: 1.15; }
+
+/* Expanded (PC): full inline detail like the original event box. */
+.game-main.party-expanded .event-inline {
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; text-align: left;
+    animation: none; box-shadow: none;
+}
+
 .event-content { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+
+/* Character details modal */
+.char-detail .cd-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.char-detail .cd-portrait {
+    width: 66px; height: 66px; border-radius: 50%; flex: 0 0 auto;
+    background-size: cover; background-position: center; border: 3px solid #0006; box-shadow: 0 2px 6px #0008;
+}
+.char-detail .cd-name { font-weight: bold; color: var(--gold-light); font-size: 1.1rem; }
+.char-detail .cd-meta { color: var(--muted); font-size: .85rem; margin-top: 2px; }
+.char-detail .cd-status { display: inline-block; margin-top: 5px; font-size: .72rem; font-weight: bold; padding: 1px 8px; border-radius: 10px; }
+.char-detail .cd-status.st-escaped { background: #2c5e2c; color: #cfe; }
+.char-detail .cd-status.st-dead { background: #4a1010; color: #fbb; }
+.char-detail .cd-status.st-ko { background: #7a5e14; color: #ffe; }
+.char-detail .cd-status.st-hidden { background: #2a2a4a; color: #cce; }
+.char-detail .cd-abilities { margin: 0; padding-left: 18px; font-size: .85rem; color: var(--text); line-height: 1.4; }
+.char-detail .cd-abilities li { margin-bottom: 7px; }
+.char-detail .cd-abilities b { color: var(--gold-light); }
 .event-icon { font-size: 1.2rem; }
 .event-head { font-size: 1rem; display: flex; align-items: center; gap: 8px; }
 /* Full illustration for image-based events (dragon) in the reminder box. */
@@ -145,7 +244,14 @@ body.in-game { overflow: hidden; }
 .event-head:has(.event-img) { display: block; }
 .event-desc { font-size: .8rem; color: var(--muted); margin-top: 5px; line-height: 1.35; }
 .muted { color: var(--muted); }
-.resources { margin-top: 12px; color: var(--muted); font-size: .9rem; display: flex; flex-direction: column; gap: 4px; }
+/* Resources as compact pictos with a count badge (kits / deck / fireballs). */
+.resources { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+.resources .res {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    color: var(--gold-light); font-size: .8rem;
+}
+.resources .res .res-ico { font-size: 1.05rem; }
+.resources .res b { font-size: .78rem; font-weight: bold; }
 
 /* ---- Board ---- */
 .board-panel {
@@ -156,6 +262,8 @@ body.in-game { overflow: hidden; }
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0;
+    min-width: 0;
 }
 .board-viewport {
     flex: 1;
@@ -165,6 +273,7 @@ body.in-game { overflow: hidden; }
     align-items: center;
     justify-content: center;
 }
+@media (max-width: 700px) { .board-viewport { padding: 16px; } }
 .board { position: relative; margin: auto; }
 .board-hint { padding: 6px 10px; color: var(--muted); font-size: .82rem; border-top: 1px solid var(--border); text-align: center; }
 
@@ -331,42 +440,205 @@ body.in-game { overflow: hidden; }
 /* multiple tokens wrap inside a tile */
 .tile { flex-wrap: wrap; gap: 0; padding: 2px; align-content: center; }
 
-/* ---- Actions ---- */
+/* ---- Actions (round icon buttons in the right rail) ---- */
 .active-banner {
-    padding: 8px 10px; border-radius: 6px; text-align: center;
-    background: var(--panel2); border: 1px solid var(--border); margin-bottom: 8px; font-weight: bold;
+    width: 46px; height: 30px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    background: var(--panel2); border: 1px solid var(--border); font-weight: bold;
+    color: var(--muted); flex: 0 0 auto;
 }
 .active-banner.your-turn { background: linear-gradient(to bottom, #3a5a20, #2c4416); color: #e7ffcf; border-color: #4f8f4a; }
+.active-banner .fa-bolt { color: #ffd23f; }
 
-/* Selected-tile description (always visible above the actions) */
+/* Round action button: an icon in a circle, with AP-cost lightning pips below. */
+.round-act {
+    position: relative;
+    width: 46px; height: 46px; padding: 0; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: 0 0 auto;
+}
+.round-act .act-ico { font-size: 1.15rem; line-height: 1; width: auto; }
+.round-act.primary { background: linear-gradient(to bottom, #c79a47, #9c7327); color: #1c1208; }
+/* AP-cost pips: small yellow bolts tucked under the icon. */
+.round-act .ap-pips {
+    position: absolute; bottom: -3px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 1px; line-height: 1;
+    background: #1c1208cc; border-radius: 6px; padding: 1px 3px;
+}
+.round-act .ap-pips .fa-bolt { font-size: .5rem; color: #ffd23f; filter: drop-shadow(0 0 1px #a76b00); }
+.round-act.passive-act { opacity: .6; border-style: dashed; cursor: default; background: var(--panel2); }
+.round-act.cancel-run-btn { background: linear-gradient(to bottom, #6a3a1c, #4a2814); border-color: #a05a2c; color: #ffe; }
+.round-act.cancel-run-btn:hover:not(:disabled) { background: linear-gradient(to bottom, #7a4522, #5a3018); }
+.round-act.needs-effort { border-style: dashed; border-color: var(--gold); }
+.round-act.needs-effort::after {
+    content: '\1f4aa'; position: absolute; top: -4px; right: -4px; font-size: .7rem;
+}
+
+/* Journal button unread badge. */
+#journal-btn { position: relative; }
+.journal-badge {
+    position: absolute; top: -3px; right: -3px; min-width: 16px; height: 16px;
+    padding: 0 3px; border-radius: 8px; background: var(--accent); color: #fff;
+    font-size: .62rem; font-weight: bold; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 3px #000;
+}
+
+.turn-controls { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+
+/* Floating tile-description panel over the board (auto-hides). */
 .tile-desc {
+    position: fixed; left: calc(var(--rail-left) + 12px); bottom: 46px; z-index: 30;
+    max-width: 260px;
     background: var(--panel2); border: 1px solid var(--border); border-left: 3px solid var(--gold);
-    border-radius: 6px; padding: 8px 10px; margin-bottom: 10px;
+    border-radius: 6px; padding: 8px 10px; box-shadow: 0 4px 16px #000a;
 }
 .tile-desc .td-title { font-weight: bold; color: var(--gold-light); font-size: .92rem; }
 .tile-desc .td-body { color: var(--muted); font-size: .8rem; margin-top: 4px; line-height: 1.35; }
 .tile-desc.tile-desc-empty { border-left-color: var(--border); }
 .tile-desc .td-hint { color: var(--muted); font-size: .8rem; font-style: italic; }
-.action-buttons { display: flex; flex-direction: column; gap: 5px; }
-.action-btn { text-align: left; display: flex; align-items: center; gap: 8px; }
-.act-ico { width: 20px; text-align: center; font-size: 1.05rem; flex: 0 0 auto; }
-.act-lbl { flex: 1; }
-.ap-cost { color: var(--gold); font-size: .78rem; font-weight: bold; flex: 0 0 auto; }
+
+/* Journal (modal) log */
+.log { font-size: .85rem; overflow-y: auto; }
+.log-line { padding: 4px 2px; border-bottom: 1px solid #3a2c1855; color: var(--muted); }
+.log-line:first-child { color: var(--gold-light); }
+
+/* Journal toasts stacked at the bottom of the screen (PC + mobile). */
+.log-toast {
+    position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%);
+    z-index: 900; display: flex; flex-direction: column; gap: 6px; align-items: center;
+    width: max-content; max-width: min(92vw, 560px); pointer-events: none;
+}
+.log-toast-line {
+    display: flex; align-items: center; gap: 8px;
+    background: #241a10ee; border: 1px solid var(--border); border-left: 3px solid var(--gold);
+    color: var(--gold-light); border-radius: 8px; padding: 7px 12px; font-size: .85rem;
+    box-shadow: 0 4px 16px #000a; max-width: 100%;
+    opacity: 0; transform: translateY(14px); transition: opacity .3s ease, transform .3s ease;
+}
+.log-toast-line.show { opacity: 1; transform: translateY(0); }
+.log-toast-line i { color: var(--gold); flex: 0 0 auto; }
+.log-toast-line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Emoji bar: a floating popover near the bottom, shown only when toggled. */
+body.in-game #game-emoji-bar { display: none; }
+body.in-game #game-emoji-bar.open {
+    display: flex; position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%);
+    z-index: 950; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 92vw;
+    background: #241a10f2; border: 1px solid var(--border); border-radius: 12px;
+    padding: 10px 12px; box-shadow: 0 8px 30px #000b;
+}
+#game-emoji-bar .emoji-send { font-size: 1.4rem; padding: 6px 10px; }
+#game-emoji-bubble { text-align: center; min-height: 1.2em; color: var(--gold-light); font-weight: bold; }
+
+/* ---- Rail display modes: compact (icons) ↔ expanded (with names) ---- */
+/* Rail toggle button (double arrows). */
+.rail-toggle {
+    flex: 0 0 auto; width: 30px; height: 24px; padding: 0; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; font-size: .8rem;
+    color: var(--gold); background: var(--panel2); border: 1px solid var(--border);
+}
+.party-panel .rail-toggle { align-self: flex-end; }
+.actions-panel .rail-toggle { align-self: flex-start; }
+
+/* Section headers, resource labels, button labels: hidden in compact rails. */
+.rail-h3 { display: none; }
+.res-lbl { display: none; }
+.round-act .act-lbl { display: none; }
+.active-banner .ab-lbl { display: none; }
+/* The "à vous" banner is redundant in compact mode (the active arrow + header
+   already show whose turn it is) — hide it to save vertical space. */
+.game-main:not(.actions-expanded) .active-banner { display: none; }
+
+/* --- Expanded (PC / detailed) overrides --- */
+.game-main.party-expanded { --rail-left: 236px; }
+.game-main.actions-expanded { --rail-right: 250px; }
+
+.game-main.party-expanded .party-panel,
+.game-main.actions-expanded .actions-panel { align-items: stretch; padding: 10px 12px; }
+
+.game-main.party-expanded .party-panel .rail-h3,
+.game-main.actions-expanded .actions-panel .rail-h3 {
+    display: block; width: 100%; color: var(--gold); margin: 12px 0 8px;
+    font-size: .95rem; border-bottom: 1px solid var(--border); padding-bottom: 4px;
+}
+.game-main.party-expanded .party-panel .rail-h3:first-of-type,
+.game-main.actions-expanded .actions-panel .rail-h3:first-of-type { margin-top: 4px; }
+
+/* Party rail — detailed cards (original horizontal layout). */
+.game-main.party-expanded #party-list { gap: 7px; }
+.party-card.detailed {
+    flex-direction: row; align-items: center; gap: 9px;
+    border-left-width: 4px; padding: 7px 9px; text-align: left;
+}
+.party-card.detailed .pc-portrait {
+    width: 34%; max-width: none; height: auto; aspect-ratio: 1 / 1;
+    border-radius: 8px; margin: 0;
+}
+.party-card.detailed .active-arrow { top: 50%; left: -11px; }
+@keyframes arrowpulse2 { 0%, 100% { left: -11px; } 50% { left: -6px; } }
+.party-card.detailed .active-arrow { animation-name: arrowpulse2; }
+.pc-info { flex: 1; min-width: 0; }
+.pc-name-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pc-name { font-weight: bold; color: var(--gold-light); }
+.pc-level {
+    font-size: .66rem; font-weight: bold; color: var(--gold);
+    background: #0003; border: 1px solid var(--border); border-radius: 8px; padding: 0 6px; white-space: nowrap;
+}
+.pc-hp-detailed { font-size: .8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.party-card.detailed .hp-bar { flex: 1; height: 7px; }
+.party-card.detailed .pc-ap { justify-content: flex-start; gap: 3px; color: var(--gold-light); font-weight: bold; font-size: .8rem; margin-top: 3px; }
+.party-card.detailed .pc-ap .pc-free { color: var(--muted); font-weight: normal; }
+.pc-owner { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+.tag { font-size: .7rem; padding: 1px 6px; border-radius: 10px; font-weight: bold; }
+.tag.escaped { background: #2c5e2c; color: #cfe; }
+.tag.dead { background: #4a1010; color: #fbb; }
+.tag.ko { background: #5a4a14; color: #ffe; }
+.tag.hidden { background: #2a2a4a; color: #cce; }
+
+/* Resources with labels in expanded mode. */
+.game-main.party-expanded .resources { align-items: stretch; margin-top: 6px; }
+.game-main.party-expanded .res { flex-direction: row; align-items: center; gap: 8px; justify-content: flex-start; }
+.game-main.party-expanded .res-lbl { display: inline; color: var(--muted); }
+.game-main.party-expanded .res b { color: var(--gold-light); }
+.game-main.party-expanded .event-box { justify-content: flex-start; }
+
+/* Actions rail — labelled row buttons (original style). */
+.game-main.actions-expanded .action-rail { align-items: stretch; gap: 5px; }
+.action-btn { text-align: left; display: flex; align-items: center; gap: 8px; width: 100%; }
+.action-btn .act-ico { width: 20px; text-align: center; font-size: 1.05rem; flex: 0 0 auto; }
+.action-btn .act-lbl { flex: 1; }
+.action-btn .ap-cost { color: var(--gold); font-size: .78rem; font-weight: bold; flex: 0 0 auto; }
+.action-btn.needs-effort { border-style: dashed; border-color: var(--gold); opacity: .92; }
+.action-btn.needs-effort .ap-cost::after { content: ' 💪'; }
+.action-btn.cancel-run-btn { background: linear-gradient(to bottom, #6a3a1c, #4a2814); border-color: #a05a2c; color: #ffe; }
+.action-btn.cancel-run-btn:hover:not(:disabled) { background: linear-gradient(to bottom, #7a4522, #5a3018); }
 .passive-chip {
     font-size: .8rem; color: var(--muted); background: var(--panel2);
     border: 1px dashed var(--border); border-radius: 14px; padding: 3px 10px; margin-top: 4px;
 }
-.cancel-run-btn { background: linear-gradient(to bottom, #6a3a1c, #4a2814); border-color: #a05a2c; color: #ffe; }
-.cancel-run-btn:hover:not(:disabled) { background: linear-gradient(to bottom, #7a4522, #5a3018); }
-.turn-controls { display: flex; gap: 6px; margin: 12px 0; }
-.turn-controls .action-btn { flex: 1; justify-content: center; }
 
-.log { font-size: .8rem; max-height: 220px; overflow-y: auto; }
-.log-line { padding: 3px 0; border-bottom: 1px solid #3a2c1855; color: var(--muted); }
-.log-line:first-child { color: var(--gold-light); }
-
-#game-emoji-bar { justify-content: center; }
-#game-emoji-bubble { text-align: center; min-height: 1.2em; color: var(--gold-light); font-weight: bold; }
+/* In expanded mode, the static round buttons (effort/endturn/journal/emoji) and
+   the active banner become full-width labelled rows. Journal/emoji live in the
+   left (party) rail, so they follow party-expanded; effort/endturn follow
+   actions-expanded. */
+.game-main.actions-expanded .actions-panel .round-act,
+.game-main.party-expanded .party-panel .round-act {
+    width: 100%; height: auto; border-radius: 6px; justify-content: flex-start;
+    gap: 8px; padding: 8px 12px;
+}
+.game-main.actions-expanded .actions-panel .round-act .act-lbl,
+.game-main.party-expanded .party-panel .round-act .act-lbl { display: inline; flex: 1; text-align: left; }
+.game-main.actions-expanded .actions-panel .round-act .ap-pips,
+.game-main.party-expanded .party-panel .round-act .ap-pips { display: none; }
+.game-main.actions-expanded .turn-controls { flex-direction: row; gap: 6px; margin: 12px 0; }
+.game-main.actions-expanded .turn-controls .round-act { flex: 1; justify-content: center; }
+.game-main.actions-expanded .turn-controls .round-act .act-lbl { flex: 0 1 auto; text-align: center; }
+.game-main.actions-expanded .active-banner {
+    width: 100%; height: auto; padding: 8px 10px; justify-content: center; font-weight: bold;
+}
+.game-main.actions-expanded .active-banner .ab-lbl { display: inline; }
+/* Compact rail : keep the journal/emoji buttons centred like the others. */
+.rail-extra { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
 
 /* direction picker */
 .dir-picker { text-align: center; }
@@ -398,12 +670,8 @@ body.in-game { overflow: hidden; }
 }
 
 /* Resource icons (kits / deck / fireballs) */
-.res-ico { width: 18px; text-align: center; color: var(--gold); }
+.res-ico { text-align: center; color: var(--gold); }
 #fireball-res .res-ico { color: #ff6a3d; }
-
-/* Button that needs an Effort to be afforded : hinted with a subtle outline. */
-.action-btn.needs-effort { border-style: dashed; border-color: var(--gold); opacity: .92; }
-.action-btn.needs-effort .ap-cost::after { content: ' 💪'; }
 
 /* ---- Heal / damage floating feedback over a party card ---- */
 .hp-fx {
@@ -429,7 +697,34 @@ body.in-game { overflow: hidden; }
     100% { opacity: 0; transform: translate(-50%, 10px) scale(1) rotate(0); }
 }
 
-@media (max-width: 900px) {
-    .game-main { grid-template-columns: 1fr; grid-auto-rows: minmax(180px, auto); height: auto; overflow: auto; }
-    body.in-game { overflow: auto; }
+/* Phones: keep the rails-around-board layout, just tighten the rails a touch. */
+@media (max-width: 600px) {
+    :root { --rail-left: 66px; --rail-right: 58px; --header-h: 46px; }
+    .round-act, .event-picto { width: 42px; height: 42px; }
+    .active-banner { width: 42px; }
+    .pc-portrait { max-width: 48px; }
+}
+
+/* In-game modals go full-screen on small viewports so questions and tile
+   orientations stay readable. */
+@media (max-width: 820px) {
+    /* IMPORTANT: never override `display` here — jQuery UI keeps closed dialog
+       wrappers at display:none, so only currently-open dialogs get sized. */
+    body.in-game .ui-dialog {
+        position: fixed !important;
+        top: 0 !important; left: 0 !important;
+        width: 100vw !important; height: 100dvh !important;
+        max-width: 100vw !important; max-height: 100dvh !important;
+        margin: 0 !important; border-radius: 0 !important;
+    }
+    body.in-game .ui-dialog .ui-dialog-titlebar { border-radius: 0; font-size: 1.05rem; padding: 12px 14px; }
+    body.in-game .ui-dialog .ui-dialog-content {
+        width: auto !important; height: auto !important;
+        max-height: calc(100dvh - 120px) !important; overflow-y: auto; padding: 14px 16px;
+    }
+    /* Bigger touch targets inside fullscreen in-game modals. */
+    body.in-game .orient-btn { width: 104px; height: 112px; }
+    body.in-game .mini-tile { width: 68px; height: 68px; }
+    body.in-game .dir-btn { min-width: 108px; padding: 12px; font-size: 1rem; }
+    body.in-game .choice-btn { padding: 13px 14px; font-size: 1rem; }
 }

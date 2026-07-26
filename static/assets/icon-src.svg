@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e0b25a"/>
+      <stop offset="1" stop-color="#9c7327"/>
+    </linearGradient>
+    <radialGradient id="bg" cx="0.35" cy="0.25" r="0.9">
+      <stop offset="0" stop-color="#33260f"/>
+      <stop offset="1" stop-color="#1a140d"/>
+    </radialGradient>
+  </defs>
+  <!-- full-bleed background so the icon is safe as a maskable icon -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <!-- dungeon arch / door, centred within the maskable safe zone -->
+  <g transform="translate(256 268) scale(6.4) translate(-32 -32)">
+    <path d="M20 50 V28 a12 12 0 0 1 24 0 V50" fill="none" stroke="url(#g)" stroke-width="4.5" stroke-linecap="round"/>
+    <rect x="28" y="36" width="8" height="14" fill="url(#g)"/>
+    <line x1="15" y1="50" x2="49" y2="50" stroke="#6b4f2a" stroke-width="3.5" stroke-linecap="round"/>
+    <circle cx="46" cy="18" r="3" fill="#b5482b"/>
+  </g>
+  <text x="256" y="430" font-size="52" fill="#c79a47" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" letter-spacing="4">ESCAPE</text>
+</svg>

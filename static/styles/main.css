@@ -34,24 +34,33 @@ a:hover { text-decoration: underline; }
 header {
     background: linear-gradient(to bottom, #3a2a16, #241a10);
     border-bottom: 2px solid var(--border);
-    padding: 14px 20px;
+    padding: 8px 20px;
 }
 .head-container {
     display: flex;
     align-items: center;
-    gap: 18px;
+    gap: 14px;
     max-width: 1100px;
     margin: 0 auto;
 }
-.logo { width: 64px; height: 64px; }
+.logo { width: 44px; height: 44px; flex: 0 0 auto; }
 .game-title {
     margin: 0;
-    font-size: 2rem;
+    font-size: 1.5rem;
     color: var(--gold);
     letter-spacing: 1px;
     text-shadow: 1px 1px 0 #000;
 }
-.subtitle { margin: 2px 0 0; color: var(--muted); font-style: italic; }
+.subtitle { margin: 1px 0 0; color: var(--muted); font-style: italic; font-size: .85rem; }
+
+/* Compact header further on phones so the login form gets the space. */
+@media (max-width: 600px) {
+    header { padding: 6px 14px; }
+    .logo { width: 36px; height: 36px; }
+    .game-title { font-size: 1.2rem; }
+    .subtitle { font-size: .78rem; }
+    main { padding: 14px 12px; }
+}
 
 /* ---- Layout ---- */
 main {
@@ -163,7 +172,54 @@ button.primary:hover:not(:disabled) { background: linear-gradient(to bottom, #e0
     grid-template-columns: 320px 1fr;
     gap: 20px;
 }
-@media (max-width: 800px) { .wr-columns { grid-template-columns: 1fr; } }
+
+/* Mobile waiting room: lock to the viewport so the character list scrolls on
+   its own while the room recap (players / difficulty / emojis) stays fixed and
+   compact above it. Activated by the `in-lobby-room` body class. */
+@media (max-width: 800px) {
+    body.in-lobby-room { height: 100dvh; overflow: hidden; }
+    body.in-lobby-room main { min-height: 0; display: flex; padding: 10px 10px 6px; }
+    body.in-lobby-room .lobby-container { flex: 1; min-height: 0; display: flex; }
+    body.in-lobby-room #waiting-room {
+        flex: 1; min-height: 0; display: flex; flex-direction: column;
+        overflow: hidden; padding: 12px 14px;
+    }
+    body.in-lobby-room #waiting-room .panel-title { margin-bottom: 8px; padding-bottom: 6px; flex: 0 0 auto; }
+    body.in-lobby-room .wr-columns {
+        display: grid; grid-template-columns: 1fr; grid-template-rows: auto 1fr;
+        gap: 10px; flex: 1; min-height: 0;
+    }
+    /* Recap block: natural height, compact spacing + shrunk section titles
+       (the buttons and player names already say what they are). */
+    body.in-lobby-room .wr-players { flex: 0 0 auto; }
+    body.in-lobby-room .wr-players h3 {
+        font-size: .72rem; text-transform: uppercase; letter-spacing: .5px;
+        color: var(--muted); margin: 6px 0 4px; border-bottom: none; padding-bottom: 0;
+    }
+    body.in-lobby-room .difficulty-block { margin-top: 6px; }
+    body.in-lobby-room .difficulty-desc { margin-top: 3px; min-height: 0; font-size: .74rem; }
+    body.in-lobby-room .emoji-bar { margin: 6px 0; }
+    body.in-lobby-room .players-list-ol { margin-bottom: 4px; }
+    body.in-lobby-room .players-list-ol li { padding: 5px 9px; margin-bottom: 4px; }
+    body.in-lobby-room #wr-start-hint { font-size: .72rem; margin-top: 5px; }
+    /* Scrollable character list. */
+    body.in-lobby-room .wr-characters {
+        min-height: 0; overflow-y: auto; display: flex; flex-direction: column;
+    }
+    body.in-lobby-room .wr-characters h3 {
+        flex: 0 0 auto; margin-top: 0; position: sticky; top: 0; z-index: 2;
+        background: var(--panel); padding-top: 2px;
+    }
+    /* At least two smaller cards per row. */
+    body.in-lobby-room .character-grid { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; }
+    body.in-lobby-room .char-portrait { width: 60px; height: 60px; margin-bottom: 5px; }
+    body.in-lobby-room .char-card { padding: 7px; }
+}
+
+/* Non-scoped fallback (older stacking) for any narrow view outside the room. */
+@media (max-width: 800px) {
+    .wr-columns { grid-template-columns: 1fr; }
+}
 
 .players-list-ol { list-style: decimal inside; padding: 0; margin: 0 0 12px; }
 .players-list-ol li {
@@ -201,37 +257,37 @@ button.primary:hover:not(:disabled) { background: linear-gradient(to bottom, #e0
 /* ---- Character grid ---- */
 .character-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
 }
 .char-card {
     border: 2px solid var(--border);
     border-radius: 8px;
-    padding: 12px;
+    padding: 9px;
     background: var(--panel2);
     cursor: pointer;
     transition: transform .08s, box-shadow .15s;
     position: relative;
+    text-align: center;
 }
 .char-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, .5); }
 .char-card.taken { opacity: .75; }
 .char-card.mine { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold) inset; }
 .char-card.taken:not(.mine) { cursor: not-allowed; }
 .char-portrait {
-    width: 100%; aspect-ratio: 1 / 1; border-radius: 50%;
+    width: 80px; height: 80px; border-radius: 50%;
     /* Zoom slightly (>100%) so the drawn border of the illustration is cropped
        out by the round frame instead of showing as a ring. */
     background-size: 130%; background-position: center;
-    border: 3px solid #0006; margin: 0 auto 8px;
+    border: 3px solid #0006; margin: 0 auto 7px;
     box-shadow: 0 2px 6px #0008;
 }
-.char-card { text-align: center; }
 .char-abilities { text-align: left; }
-.char-name { font-weight: bold; color: var(--gold-light); }
-.char-meta { color: var(--muted); font-size: .85rem; margin-bottom: 6px; }
-.char-abilities { margin: 0; padding-left: 16px; font-size: .78rem; color: var(--muted); }
-.char-abilities li { margin-bottom: 4px; }
-.char-owner { margin-top: 6px; font-size: .78rem; color: var(--gold); }
+.char-name { font-weight: bold; color: var(--gold-light); font-size: .95rem; }
+.char-meta { color: var(--muted); font-size: .8rem; margin-bottom: 5px; }
+.char-abilities { margin: 0; padding-left: 15px; font-size: .74rem; color: var(--muted); line-height: 1.35; }
+.char-abilities li { margin-bottom: 3px; }
+.char-owner { margin-top: 5px; font-size: .74rem; color: var(--gold); }
 
 /* ---- Footer ---- */
 footer {
@@ -248,6 +304,20 @@ footer {
     flex-wrap: wrap;
 }
 .sep { color: var(--border); }
+
+/* Icon-only footer: labels are hidden, only the pictos remain (with tooltips).
+   Icons get comfortable touch targets for mobile. */
+.icon-footer { gap: 4px; }
+.icon-footer .lbl { display: none; }
+.icon-footer .foot-ico {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 34px; min-height: 34px; border-radius: 8px;
+    color: var(--gold); cursor: pointer; font-size: 1.1rem;
+}
+.icon-footer .foot-ico a { color: var(--gold); display: inline-flex; padding: 6px; }
+.icon-footer .foot-ico:hover, .icon-footer .foot-ico a:hover { color: var(--gold-light); background: #ffffff10; }
+.icon-footer .foot-ico.rules a:hover { text-decoration: none; }
+
 #debug-button {
     width: 12px; height: 12px; border-radius: 50%;
     background: #444; display: inline-block; cursor: pointer;

@@ -46,6 +46,16 @@ app.get('/', (req, res) => {
         res.sendFile(path.resolve(__dirname, '.') + '/static/main.html');
     }
 });
+// Service worker must be served from the site root so its scope covers the
+// whole app (a file under /static/ would only control /static/).
+app.get('/service-worker.js', (req, res) => {
+    res.set('Cache-Control', 'no-cache');
+    res.sendFile(path.resolve(__dirname, 'static/service-worker.js'));
+});
+app.get('/manifest.webmanifest', (req, res) => {
+    res.type('application/manifest+json');
+    res.sendFile(path.resolve(__dirname, 'static/manifest.webmanifest'));
+});
 app.use(express.static(path.resolve(__dirname, '.')));
 
 // ---------------------------------------------------------------------------

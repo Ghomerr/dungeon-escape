@@ -2,7 +2,7 @@ const Socket = io();
 const Player = {};
 const Game = { state: null };
 
-let CELL = 84; // px per board cell
+let CELL = 84; // px per board cell (kept constant so tokens/animations stay aligned)
 
 // Identity injected by the lobby form.
 const params = new URLSearchParams(window.location.search);
@@ -176,6 +176,34 @@ $(document).ready(() => {
     $('#dir-dialog').dialog({ modal: true, autoOpen: false, width: 260 });
     $('#choice-dialog').dialog({ modal: true, autoOpen: false, width: 300 });
     $('#placement-dialog').dialog({ modal: true, autoOpen: false, width: 430 });
+    $('#log-dialog').dialog({ modal: true, autoOpen: false, width: Math.min(560, $(window).width() - 30), height: Math.min(560, $(window).height() - 60), buttons: [{ text: 'Fermer', click: () => $('#log-dialog').dialog('close') }] });
+    $('#event-dialog').dialog({ modal: true, autoOpen: false, width: Math.min(420, $(window).width() - 30), buttons: [{ text: 'Fermer', click: () => $('#event-dialog').dialog('close') }] });
+    $('#char-dialog').dialog({ modal: true, autoOpen: false, width: Math.min(440, $(window).width() - 30), buttons: [{ text: 'Fermer', click: () => $('#char-dialog').dialog('close') }] });
+
+    // Tapping a party card opens the adventurer's details + abilities (the hover
+    // tooltip is unreachable on touch devices).
+    $('#party-list').on('click', '.party-card', function () {
+        const cid = $(this).data('cid');
+        const c = Game.state && Game.state.characters.find(x => x.id === cid);
+        if (c) openCharDialog(c);
+    });
+
+    // Journal opens in a modal; opening it clears the "unread" badge.
+    $('#journal-btn').click(() => {
+        Game._logUnread = 0;
+        $('#journal-badge').hide().text('');
+        $('#log-dialog').dialog('open');
+    });
+    // Emoji bar toggle: a small floating popover near the bottom (reliably
+    // visible on both mobile and PC).
+    $('#emoji-toggle-btn').click(() => $('#game-emoji-bar').toggleClass('open'));
+    $('#game-emoji-bar').on('click', '.emoji-send', () => $('#game-emoji-bar').removeClass('open'));
+
+    // Manual compact/detailed toggles for the two side rails (double-arrow
+    // buttons). Defaults to detailed on wide screens, compact on phones.
+    initUiModes();
+    $('#party-toggle').click(() => toggleUiMode('party'));
+    $('#actions-toggle').click(() => toggleUiMode('actions'));
 
     Socket.emit('join-game', { roomId: Player.roomId, userId: Player.id, token: Player.token });
 
@@ -456,12 +484,16 @@ function tileFullLabel(tile) {
     return txt + '\n' + desc;
 }
 
-// Show the tile description in the permanent panel (above the action buttons).
+// Show the clicked tile's description as a floating panel over the board that
+// fades out on its own (the side rails no longer host it).
 function showTileDesc(tile) {
     const parts = tileFullLabel(tile).split('\n');
-    $('#tile-desc').removeClass('tile-desc-empty').html(
+    const $d = $('#tile-desc').removeClass('tile-desc-empty').html(
         '<div class="td-title">' + escapeHtml(parts[0]) + '</div>' +
         '<div class="td-body">' + escapeHtml(parts[1] || '') + '</div>');
+    $d.stop(true, true).css('display', 'block').css('opacity', 1);
+    clearTimeout(Game._tileDescTimer);
+    Game._tileDescTimer = setTimeout(() => $d.fadeOut(400), 5000);
 }
 
 // Dangers that make the active character lose HP just by entering `tile`
@@ -582,6 +614,34 @@ function maybeShowEventToast(state) {
     Game._sudden = state.suddenDeath;
 }
 
+// --- Rail display modes (compact icons ↔ detailed with names) --------------
+
+function initUiModes() {
+    const wide = window.innerWidth >= 900;
+    Game.ui = {
+        party: localStorage.getItem('de-party-view') || (wide ? 'expanded' : 'compact'),
+        actions: localStorage.getItem('de-actions-view') || (wide ? 'expanded' : 'compact')
+    };
+    applyUiModes();
+}
+function applyUiModes() {
+    const $m = $('.game-main');
+    $m.toggleClass('party-expanded', Game.ui.party === 'expanded');
+    $m.toggleClass('actions-expanded', Game.ui.actions === 'expanded');
+    // Arrow points "outward" to collapse, "inward" to expand.
+    $('#party-toggle i').attr('class', Game.ui.party === 'expanded' ? 'fas fa-angles-left' : 'fas fa-angles-right');
+    $('#actions-toggle i').attr('class', Game.ui.actions === 'expanded' ? 'fas fa-angles-right' : 'fas fa-angles-left');
+}
+function toggleUiMode(which) {
+    Game.ui[which] = Game.ui[which] === 'expanded' ? 'compact' : 'expanded';
+    localStorage.setItem('de-' + which + '-view', Game.ui[which]);
+    applyUiModes();
+    if (Game.state) {
+        if (which === 'party') { renderParty(Game.state); renderEvent(Game.state); }
+        else renderActions(Game.state);
+    }
+}
+
 function render(state) {
     maybeShowEventToast(state);
     if (state.status !== 'PLAYING') renderEnd(state);
@@ -605,7 +665,7 @@ function renderFireballs(state) {
     const pyro = state.characters.find(c => c.abilities && c.abilities.some(a => a.id === 'fireball'));
     if (!pyro) { $('#fireball-res').hide(); return; }
     const left = Math.max(0, FIREBALL_USES - ((pyro.uses && pyro.uses.fireball) || 0));
-    $('#fireball-count').text(left + ' / ' + FIREBALL_USES);
+    $('#fireball-count').text(left);
     $('#fireball-res').css('display', '');
 }
 
@@ -636,22 +696,32 @@ function spawnHpFx(state) {
 
 function renderHeader(state) {
     const ac = activeChar();
-    let info = 'Tour ' + state.round;
+    // Structured turn info: on mobile only the active adventurer's name (.ti-who)
+    // is shown; the round number (.ti-round) and AP / position (.ti-extra) are
+    // hidden by CSS since that detail lives elsewhere on small screens.
+    let who = '';
     if (ac) {
-        info += ' · À ' + (ac.ownerId === Player.id ? 'VOUS' : ac.ownerId) + ' : ' + ac.name +
-            ' — ' + state.ap + ' PA' + (state.freeMoves ? ' (+' + state.freeMoves + ' dépl.)' : '');
-        if (state.interrupt) info += ' ⚡ action immédiate';
+        who = 'À ' + (ac.ownerId === Player.id ? 'VOUS' : escapeHtml(ac.ownerId)) + ' : ' + escapeHtml(ac.name) +
+            (state.interrupt ? ' ⚡' : '');
+    }
+    let extra = '';
+    if (ac) {
+        extra = ' — ' + state.ap + ' PA' + (state.freeMoves ? ' (+' + state.freeMoves + ' dépl.)' : '');
+        if (state.interrupt) extra += ' action immédiate';
         if (state.turnTotal) {
             const pos = state.turnTotal - state.turnRemaining + 1;
             const left = state.turnRemaining - 1; // adventurers still waiting after the active one
-            info += ' · Aventurier ' + pos + '/' + state.turnTotal +
+            extra += ' · Aventurier ' + pos + '/' + state.turnTotal +
                 (left > 0 ? ' (' + left + ' après lui)' : ' (dernier du tour)');
         }
     }
-    $('#turn-info').text(info);
-    if (state.suddenDeath) $('#turns-left').html('<span class="sudden">💀 MORT SUBITE</span>');
-    else $('#turns-left').text('Tours restants : ' + state.turnsLeft);
-    if (state.dragons.length) $('#dragon-marker').show().text('🐉 ×' + state.dragons.length + ' dans le donjon');
+    $('#turn-info').html('<span class="ti-round">Tour ' + state.round + (who ? ' · ' : '') + '</span>' +
+        '<span class="ti-who">' + who + '</span>' +
+        '<span class="ti-extra">' + extra + '</span>');
+
+    if (state.suddenDeath) $('#turns-left').attr('title', 'Mort subite').html('<span class="sudden">💀<span class="tl-lbl"> MORT SUBITE</span></span>');
+    else $('#turns-left').attr('title', 'Tours restants').html('<i class="fas fa-hourglass-half tl-ico"></i><span class="tl-lbl">Tours restants : </span>' + state.turnsLeft);
+    if (state.dragons.length) $('#dragon-marker').show().attr('title', state.dragons.length + ' dragon(s) dans le donjon').html('🐉 ×' + state.dragons.length);
     else $('#dragon-marker').hide();
 }
 
@@ -666,8 +736,16 @@ function abilitiesTip(c) {
     return attrEscape(c.name + '\n' + lines.join('\n'));
 }
 
+// Small yellow lightning pips representing a number of action points.
+function apPips(n) {
+    let s = '';
+    for (let i = 0; i < n; i++) s += '<i class="fas fa-bolt"></i>';
+    return s;
+}
+
 function renderParty(state) {
     const $list = $('#party-list').empty();
+    const expanded = Game.ui && Game.ui.party === 'expanded';
 
     // List adventurers in the round's play order (rotation starting at the
     // current first player) so it's easy to see who plays next and when the
@@ -681,49 +759,152 @@ function renderParty(state) {
     }
     state.characters.forEach(c => { if (ordered.indexOf(c) === -1) ordered.push(c); });
 
-    ordered.forEach(c => {
-        let status = '';
-        if (c.escaped) status = '<span class="tag escaped">échappé</span>';
-        else if (c.dead) status = '<span class="tag dead">mort</span>';
-        else if (!c.conscious) status = '<span class="tag ko">inconscient</span>';
-        else if (c.hidden) status = '<span class="tag hidden">caché</span>';
-        const hpBar = '<div class="hp-bar"><div class="hp-fill" style="width:' + (c.maxHp ? (100 * c.hp / c.maxHp) : 0) + '%"></div></div>';
-        const isActive = c.id === state.activeId;
-        const active = isActive ? ' active' : '';
-        const arrow = isActive ? '<span class="active-arrow"></span>' : '';
-        // Action points : only the active adventurer currently has any, so show
-        // the line (like the HP line) only on that card.
-        const apRow = isActive
-            ? '<div class="pc-ap">⚡ ' + state.ap + ' PA' +
-              (state.freeMoves ? ' <span class="pc-free">(+' + state.freeMoves + ' dépl.)</span>' : '') + '</div>'
-            : '';
-        $list.append('<div class="party-card' + active + '" data-cid="' + c.id + '" title="' + abilitiesTip(c) + '" style="border-color:' + c.color + '">' + arrow +
-            '<div class="pc-portrait" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '"></div>' +
-            '<div class="pc-info">' +
-            '<div class="pc-name-row"><span class="pc-name">' + c.name + '</span>' +
-            '<span class="pc-level" title="Niveau — les dragons ciblent en priorité le niveau le plus bas">Niv. ' + c.level + '</span>' +
-            status + '</div>' +
-            '<div class="pc-hp">' + c.hp + '/' + c.maxHp + ' PV ' + hpBar + '</div>' +
-            apRow +
-            '<div class="pc-owner"><i class="fas fa-user"></i> ' + escapeHtml(c.ownerId) + '</div></div></div>');
-    });
+    ordered.forEach(c => $list.append(expanded ? detailedPartyCard(c, state) : compactPartyCard(c, state)));
+}
+
+// Compact card (mobile / collapsed rail): portrait + HP + AP pips, status badge.
+function compactPartyCard(c, state) {
+    let statusIco = '', statusCls = '';
+    if (c.escaped) { statusIco = '<i class="fas fa-door-open"></i>'; statusCls = ' st-escaped'; }
+    else if (c.dead) { statusIco = '<i class="fas fa-skull"></i>'; statusCls = ' st-dead'; }
+    else if (!c.conscious) { statusIco = '<i class="fas fa-star-of-life"></i>'; statusCls = ' st-ko'; }
+    else if (c.hidden) { statusIco = '<i class="fas fa-mask"></i>'; statusCls = ' st-hidden'; }
+    const statusBadge = statusIco ? '<span class="pc-status' + statusCls + '">' + statusIco + '</span>' : '';
+
+    const hpPct = c.maxHp ? (100 * c.hp / c.maxHp) : 0;
+    const hpBar = '<div class="hp-bar"><div class="hp-fill" style="width:' + hpPct + '%"></div></div>';
+    const isActive = c.id === state.activeId;
+    const arrow = isActive ? '<span class="active-arrow"></span>' : '';
+    const apRow = isActive
+        ? '<div class="pc-ap" title="Points d\'action">' + apPips(state.ap) +
+          (state.freeMoves ? '<span class="pc-free">+' + state.freeMoves + '</span>' : '') + '</div>'
+        : '';
+    const tip = attrEscape(c.name + ' — Niv. ' + c.level + ' · ' + c.hp + '/' + c.maxHp + ' PV · ' + c.ownerId) +
+        '\n' + abilitiesTip(c);
+    return '<div class="party-card compact' + (isActive ? ' active' : '') + '" data-cid="' + c.id + '" title="' + tip + '" style="border-color:' + c.color + '">' + arrow +
+        '<div class="pc-portrait" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '">' + statusBadge + '</div>' +
+        '<div class="pc-hp"><span class="pc-hp-num">' + c.hp + '</span>' + hpBar + '</div>' +
+        apRow + '</div>';
+}
+
+// Detailed card (PC / expanded rail): the original full card with name, level,
+// status tag, HP text, AP and owner.
+function detailedPartyCard(c, state) {
+    let status = '';
+    if (c.escaped) status = '<span class="tag escaped">échappé</span>';
+    else if (c.dead) status = '<span class="tag dead">mort</span>';
+    else if (!c.conscious) status = '<span class="tag ko">inconscient</span>';
+    else if (c.hidden) status = '<span class="tag hidden">caché</span>';
+    const hpBar = '<div class="hp-bar"><div class="hp-fill" style="width:' + (c.maxHp ? (100 * c.hp / c.maxHp) : 0) + '%"></div></div>';
+    const isActive = c.id === state.activeId;
+    const arrow = isActive ? '<span class="active-arrow"></span>' : '';
+    const apRow = isActive
+        ? '<div class="pc-ap" title="Points d\'action">' + apPips(state.ap) + ' ' + state.ap + ' PA' +
+          (state.freeMoves ? ' <span class="pc-free">(+' + state.freeMoves + ' dépl.)</span>' : '') + '</div>'
+        : '';
+    return '<div class="party-card detailed' + (isActive ? ' active' : '') + '" data-cid="' + c.id + '" title="' + abilitiesTip(c) + '" style="border-color:' + c.color + '">' + arrow +
+        '<div class="pc-portrait" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '"></div>' +
+        '<div class="pc-info">' +
+        '<div class="pc-name-row"><span class="pc-name">' + escapeHtml(c.name) + '</span>' +
+        '<span class="pc-level" title="Niveau — les dragons ciblent en priorité le niveau le plus bas">Niv. ' + c.level + '</span>' +
+        status + '</div>' +
+        '<div class="pc-hp-detailed">' + c.hp + '/' + c.maxHp + ' PV ' + hpBar + '</div>' +
+        apRow +
+        '<div class="pc-owner"><i class="fas fa-user"></i> ' + escapeHtml(c.ownerId) + '</div></div></div>';
+}
+
+// Character details + abilities, shown in a modal when a party card is tapped.
+function openCharDialog(c) {
+    let statusTxt = '';
+    if (c.escaped) statusTxt = '<span class="cd-status st-escaped">Échappé</span>';
+    else if (c.dead) statusTxt = '<span class="cd-status st-dead">Mort</span>';
+    else if (!c.conscious) statusTxt = '<span class="cd-status st-ko">Inconscient</span>';
+    else if (c.hidden) statusTxt = '<span class="cd-status st-hidden">Caché</span>';
+
+    const abilities = (c.abilities || []).map(a =>
+        '<li><b>' + escapeHtml(a.name) + '</b> ' + (a.passive ? '(Passif)' : '(' + a.cost + ' PA)') +
+        ' — ' + escapeHtml(a.description) + '</li>').join('');
+
+    $('#char-detail').html(
+        '<div class="cd-head">' +
+        '<div class="cd-portrait" style="background-image:url(' + portraitCardUrl(c.id) + ');border-color:' + c.color + '"></div>' +
+        '<div class="cd-id"><div class="cd-name">' + escapeHtml(c.name) + '</div>' +
+        '<div class="cd-meta">Niv. ' + c.level + ' · ' + c.hp + '/' + c.maxHp + ' PV · ' +
+        '<i class="fas fa-user"></i> ' + escapeHtml(c.ownerId) + '</div>' + statusTxt + '</div></div>' +
+        '<ul class="cd-abilities">' + abilities + '</ul>');
+    $('#char-dialog').dialog('option', 'title', c.name);
+    $('#char-dialog').dialog('open');
 }
 
 function renderEvent(state) {
     const e = state.currentEvent;
-    if (!e) { $('#event-content').html('<span class="muted">Aucun événement pour l\'instant.</span>'); return; }
+    const expanded = Game.ui && Game.ui.party === 'expanded';
+    const $inline = $('#event-inline').off('click').removeClass('clickable has-event');
+
+    if (!e) {
+        // Always show the zone, even when nothing is happening (both modes).
+        $inline.html('<span class="muted">Aucun événement</span>');
+        $('#event-content').html('<span class="muted">Aucun événement pour l\'instant.</span>');
+        return;
+    }
+
     const info = EVENT_INFO[e.type] || { icon: '🎴', desc: '' };
     const iconHtml = EVENT_IMG[e.type]
         ? '<img class="event-img" src="' + EVENT_IMG[e.type] + '" alt="">'
         : '<span class="event-icon">' + info.icon + '</span>';
-    $('#event-content').html('<div class="event-head">' + iconHtml + ' <b>' + e.label + '</b></div>' +
+    // Modal detail (used on mobile tap, and available anywhere).
+    $('#event-dialog').dialog('option', 'title', e.label);
+    $('#event-content').html('<div class="event-head">' + iconHtml + ' <b>' + escapeHtml(e.label) + '</b></div>' +
         '<div class="event-desc">' + info.desc + '</div>' +
         (e.type === 'poison' ? '<div class="hint">Actif jusqu\'à la prochaine phase d\'événement.</div>' : ''));
+
+    if (expanded) {
+        // PC: full inline render (icon + name + description), everything visible.
+        $inline.html('<div class="event-head">' + iconHtml + ' <b>' + escapeHtml(e.label) + '</b></div>' +
+            '<div class="event-desc">' + info.desc + '</div>' +
+            (e.type === 'poison' ? '<div class="hint">Actif jusqu\'à la prochaine phase d\'événement.</div>' : ''));
+    } else {
+        // Mobile: emoji + name only, tap for details in the modal.
+        const smallIcon = EVENT_IMG[e.type]
+            ? '<img class="ev-mini-img" src="' + EVENT_IMG[e.type] + '" alt="">'
+            : '<span class="ev-emoji">' + info.icon + '</span>';
+        $inline.addClass('has-event clickable')
+            .css('--ev-color', EVENT_COLORS[e.type] || '#333')
+            .html(smallIcon + '<span class="ev-name">' + escapeHtml(e.label) + '</span>')
+            .attr('title', 'Événement : ' + e.label + ' (voir le détail)')
+            .on('click', () => $('#event-dialog').dialog('open'));
+    }
 }
 
 function renderLog(state) {
     const $log = $('#log').empty();
     state.log.slice().reverse().forEach(line => $log.append('<div class="log-line">' + escapeHtml(line) + '</div>'));
+
+    // New lines since the last render pop as bottom toasts (both PC & mobile).
+    const len = state.log.length;
+    if (Game._logLen === undefined) { Game._logLen = len; return; }   // no backlog toast on first render
+    if (len > Game._logLen) {
+        const fresh = state.log.slice(Game._logLen);
+        fresh.forEach(pushLogToast);
+        // Bump the journal unread badge if the modal isn't open.
+        if (!($('#log-dialog').dialog('instance') && $('#log-dialog').dialog('isOpen'))) {
+            Game._logUnread = (Game._logUnread || 0) + fresh.length;
+            $('#journal-badge').text(Game._logUnread > 9 ? '9+' : Game._logUnread).show();
+        }
+    }
+    Game._logLen = len;
+}
+
+// Slide a short-lived toast in from the bottom for a new journal line. Up to
+// MAX_TOASTS stay visible at once (oldest removed first).
+const MAX_TOASTS = 3;
+function pushLogToast(line) {
+    const $wrap = $('#log-toast');
+    const $t = $('<div class="log-toast-line"><i class="fas fa-scroll"></i><span>' + escapeHtml(line) + '</span></div>');
+    $wrap.append($t);
+    while ($wrap.children().length > MAX_TOASTS) $wrap.children().first().remove();
+    requestAnimationFrame(() => $t.addClass('show'));
+    setTimeout(() => { $t.removeClass('show'); setTimeout(() => $t.remove(), 400); }, 4200);
 }
 function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -974,6 +1155,7 @@ function renderActions(state) {
     const ac = activeChar();
     const ap = state.ap, freeMoves = state.freeMoves;
     const blockedByPending = !!state.pending;
+    const expanded = Game.ui && Game.ui.actions === 'expanded';
 
     // During a Run / Animal Celerity, only movement (and cancel) is allowed.
     const running = freeMoves > 0;
@@ -987,11 +1169,22 @@ function renderActions(state) {
     const effortAssistFor = (def) =>
         my && ac && ac.conscious && !blockedByPending && !running &&
         !state.effortUsed && def.cost > 0 && ap < def.cost && (ap + 1) >= def.cost;
+    // Yellow lightning pips showing an AP cost inside a round action button.
+    const costPips = (n) => {
+        if (!n) return '';
+        let s = '<span class="ap-pips">';
+        for (let i = 0; i < n; i++) s += '<i class="fas fa-bolt"></i>';
+        return s + '</span>';
+    };
     const buildBtn = (def, isAbility) => {
         const icon = isAbility ? (ABILITY_ICON[def.abilityId] || '✨') : (ACTION_ICON[def.action] || '');
-        const $b = $('<button class="action-btn"><span class="act-ico">' + icon + '</span><span class="act-lbl">' + def.label +
-            '</span><span class="ap-cost">' + (def.cost ? def.cost + ' PA' : '') + '</span></button>');
-        $b.attr('title', def.tip);
+        // Expanded (PC) : labelled row button. Compact (mobile) : icon-only round
+        // button with AP-cost pips, the label/description living in the tooltip.
+        const $b = expanded
+            ? $('<button class="action-btn"><span class="act-ico">' + icon + '</span><span class="act-lbl">' + escapeHtml(def.label) +
+                '</span><span class="ap-cost">' + (def.cost ? def.cost + ' PA' : '') + '</span></button>')
+            : $('<button class="round-act"><span class="act-ico">' + icon + '</span>' + costPips(def.cost) + '</button>');
+        $b.attr('title', def.label + (def.cost ? ' (' + def.cost + ' PA)' : '') + (def.tip ? ' — ' + def.tip : ''));
         const normal = enabledFor(def);
         const assist = !normal && effortAssistFor(def);
         $b.prop('disabled', !(normal || assist));
@@ -1001,8 +1194,10 @@ function renderActions(state) {
     };
     // Cancel button shown in place of the Run / Celerity button until a move starts.
     const buildCancelBtn = (label) => {
-        const $b = $('<button class="action-btn cancel-run-btn"><span class="act-ico">' + faIco('rotate-left') + '</span><span class="act-lbl">' +
-            label + '</span><span class="ap-cost"></span></button>');
+        const $b = expanded
+            ? $('<button class="action-btn cancel-run-btn"><span class="act-ico">' + faIco('rotate-left') + '</span><span class="act-lbl">' + escapeHtml(label) + '</span><span class="ap-cost"></span></button>')
+            : $('<button class="round-act cancel-run-btn"><span class="act-ico">' + faIco('rotate-left') + '</span></button>');
+        $b.attr('title', label);
         const enabled = my && !blockedByPending && !!state.cancelRunKind;
         $b.prop('disabled', !enabled);
         if (enabled) $b.click(() => sendAction('cancel-run', {}));
@@ -1027,23 +1222,38 @@ function renderActions(state) {
             if (a.id === 'fireball' && ac.uses && ac.uses.fireball >= 3) $b.prop('disabled', true);
             $abil.append($b);
         });
+        // Passive abilities: labelled chip (PC) or dimmed round picto (mobile).
         ac.abilities.filter(a => a.passive).forEach(a => {
-            $abil.append('<div class="passive-chip" title="' + a.description.replace(/"/g, '&quot;') + '">' + (ABILITY_ICON[a.id] || '✨') + ' ' + a.name + '</div>');
+            if (expanded) {
+                $abil.append('<div class="passive-chip" title="' + attrEscape(a.description) + '">' + (ABILITY_ICON[a.id] || '✨') + ' ' + escapeHtml(a.name) + '</div>');
+            } else {
+                $abil.append('<span class="round-act passive-act" title="' + attrEscape(a.name + ' (passif) — ' + a.description) + '"><span class="act-ico">' + (ABILITY_ICON[a.id] || '✨') + '</span></span>');
+            }
         });
     }
 
     $('#effort-btn').prop('disabled', !my || !ac || !ac.conscious || state.effortUsed || blockedByPending);
     $('#endturn-btn').prop('disabled', !my || blockedByPending);
 
+    // Effort / end-turn : labelled in expanded mode, icon-only when compact.
+    $('#effort-btn').html('<span class="act-ico">' + faIco('dumbbell') + '</span><span class="act-lbl">Effort</span>');
+    const endLbl = ac && !ac.conscious ? 'Passer le tour' : (state.interrupt ? 'Finir l\'action' : 'Finir le tour');
+
     if (state.status !== 'PLAYING') {
-        $('#active-banner').text('Partie terminée').removeClass('your-turn');
+        $('#active-banner').html('<i class="fas fa-flag-checkered"></i><span class="ab-lbl"> Partie terminée</span>').attr('title', 'Partie terminée').removeClass('your-turn');
+        $('#endturn-btn').attr('title', endLbl).html('<span class="act-ico">' + faIco('forward-step') + '</span><span class="act-lbl">' + endLbl + '</span>');
     } else if (my) {
         const koNote = ac && !ac.conscious ? ' (inconscient — passez votre tour)' : '';
-        const inter = state.interrupt ? ' ⚡' : '';
-        $('#active-banner').text('À vous : ' + (ac ? ac.name : '') + inter + koNote).addClass('your-turn');
-        $('#endturn-btn').html('<span class="act-ico">' + faIco('forward-step') + '</span> ' + (ac && !ac.conscious ? 'Passer le tour' : (state.interrupt ? 'Finir l\'action' : 'Finir le tour')));
+        const inter = state.interrupt ? ' ⚡ action immédiate' : '';
+        const who = 'À vous : ' + (ac ? escapeHtml(ac.name) : '');
+        $('#active-banner').html('<i class="fas fa-hand-point-right"></i>' + (state.interrupt ? ' <i class="fas fa-bolt"></i>' : '') + '<span class="ab-lbl"> ' + who + '</span>')
+            .attr('title', who + inter + koNote).addClass('your-turn');
+        $('#endturn-btn').attr('title', endLbl).html('<span class="act-ico">' + faIco('forward-step') + '</span><span class="act-lbl">' + endLbl + '</span>');
     } else {
-        $('#active-banner').text('Tour de ' + (state.activeOwnerId || '…') + (state.interrupt ? ' (action immédiate)' : '')).removeClass('your-turn');
+        const owner = escapeHtml(state.activeOwnerId || '…');
+        $('#active-banner').html('<i class="fas fa-hourglass-half"></i><span class="ab-lbl"> Tour de ' + owner + '</span>')
+            .attr('title', 'Tour de ' + owner + (state.interrupt ? ' (action immédiate)' : '')).removeClass('your-turn');
+        $('#endturn-btn').attr('title', endLbl).html('<span class="act-ico">' + faIco('forward-step') + '</span><span class="act-lbl">' + endLbl + '</span>');
     }
 
     // Board hint

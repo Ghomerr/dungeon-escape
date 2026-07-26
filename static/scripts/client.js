@@ -212,6 +212,9 @@ Socket.on('user-connected', (data) => {
     Lobby.$inputs.hide();
     Lobby.$roomsList.hide();
     Lobby.$waitingRoom.show();
+    // Lock the page to the viewport (mobile) so the character list scrolls under
+    // a fixed room recap.
+    document.body.classList.add('in-lobby-room');
     $('#wr-room-name').text(data.roomId);
 });
 
