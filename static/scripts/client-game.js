@@ -116,11 +116,6 @@ function tileArt(t) {
 // <id>_portrait.png variant.
 function portraitUrl(id) { return 'static/assets/adventurers/' + id + '.png'; }
 function portraitCardUrl(id) { return 'static/assets/adventurers/' + id + '_portrait.png'; }
-// Inline portrait + name, to designate an adventurer in a menu (no emoji).
-function charMenuLabel(c, suffix) {
-    return '<img class="menu-portrait" src="' + portraitCardUrl(c.id) + '" alt="">' +
-        '<span class="menu-char-name">' + escapeHtml(c.name) + (suffix || '') + '</span>';
-}
 
 const EVENT_INFO = {
     fire: { icon: '🔥', desc: 'Un jet de dé désigne les tuiles inflammables qui prennent feu (-3 PV ; Pyromancien -1).' },
@@ -164,7 +159,7 @@ const DUNGEON_ACTIONS = [
 const ABILITY_MODE = {
     'flame-mastery': 'dirHere', 'apply-balm': 'otherSameTile', 'animal-celerity': 'none',
     'lockpicking': 'none', 'slay-dragon': 'none', 'inspiration': 'otherAny',
-    'fireball': 'dir', 'shadow-walk': 'shadowDest'
+    'fireball': 'fireballDir', 'shadow-walk': 'shadowDest'
 };
 
 // --- Bootstrap -------------------------------------------------------------
@@ -204,6 +199,9 @@ $(document).ready(() => {
     initUiModes();
     $('#party-toggle').click(() => toggleUiMode('party'));
     $('#actions-toggle').click(() => toggleUiMode('actions'));
+
+    // Escape leaves the board targeting mode (fireball, shadow walk, heal…).
+    $(document).on('keydown', (e) => { if (e.key === 'Escape') cancelTargeting(); });
 
     Socket.emit('join-game', { roomId: Player.roomId, userId: Player.id, token: Player.token });
 
@@ -408,6 +406,36 @@ function openMenu(title, items) {
     $d.dialog('open');
 }
 
+// --- Board targeting mode ---------------------------------------------------
+// Instead of asking for coordinates / names in a modal, an action can enter a
+// "targeting" mode : the eligible cells (or adventurers) are highlighted on the
+// board and a single click on one of them validates the action.
+//
+// Game.targeting = {
+//   charId, title, cls,           // highlight colour class (tgt-orange, …)
+//   mark,                         // small icon drawn in the middle of a cell
+//   cells: [{ row, col, onPick }] // highlighted board cells (may be empty cells)
+//   chars: [{ id, onPick }]       // highlighted adventurer tokens
+// }
+
+function startTargeting(opts) {
+    Game.targeting = opts;
+    $('#target-bar').html('<span class="tb-txt">' + opts.title + '</span>' +
+        '<button class="tb-cancel"><i class="fas fa-xmark"></i> Annuler</button>').css('display', 'flex');
+    $('#target-bar .tb-cancel').off('click').on('click', cancelTargeting);
+    if (Game.state) { renderBoard(Game.state); renderActions(Game.state); }
+}
+
+function cancelTargeting() {
+    if (!Game.targeting) return;
+    Game.targeting = null;
+    $('#target-bar').hide().empty();
+    if (Game.state) { renderBoard(Game.state); renderActions(Game.state); }
+}
+
+// Leave targeting mode, then run the picked action.
+function resolveTarget(fn) { cancelTargeting(); fn(); }
+
 // --- Action modes (for side buttons) ---------------------------------------
 
 function runActionMode(mode, def, isAbility) {
@@ -416,6 +444,14 @@ function runActionMode(mode, def, isAbility) {
         if (isAbility) { payload.abilityId = def.abilityId; sendAction('ability', payload); }
         else sendAction(def.action, payload);
     };
+    // Any new action cancels a targeting still in progress.
+    cancelTargeting();
+    // Highlight adventurers in green and validate on a click on their token.
+    const targetChars = (cands, title) => startTargeting({
+        charId: ac.id, title, cls: 'tgt-green',
+        chars: cands.map(c => ({ id: c.id, onPick: () => emit({ targetId: c.id }) }))
+    });
+
     switch (mode) {
         case 'none': emit({}); break;
         case 'dir': openDirPicker({ title: def.label }, (dir) => emit({ dir })); break;
@@ -423,33 +459,53 @@ function runActionMode(mode, def, isAbility) {
         case 'sameTile': {
             const cands = Game.state.characters.filter(c => !c.escaped && !c.dead && c.row === ac.row && c.col === ac.col);
             if (!cands.length) return;
-            // Alone on the tile : heal oneself immediately, no target menu.
+            // Alone on the tile : heal oneself immediately, no target to pick.
             if (cands.length === 1) { emit({ targetId: cands[0].id }); return; }
-            openMenu('Soigner qui ?', cands.map(c => ({ label: charMenuLabel(c, ' (' + c.hp + '/' + c.maxHp + ')'), fn: () => emit({ targetId: c.id }) })));
+            targetChars(cands, '💚 ' + def.label + ' : cliquez l\'aventurier à soigner.');
             break;
         }
         case 'otherSameTile': {
             const cands = Game.state.characters.filter(c => c.id !== ac.id && !c.escaped && !c.dead && c.row === ac.row && c.col === ac.col);
             if (!cands.length) { Dialog.openSimpleDialog($('#simple-dialog'), 'Aucune cible', 'Aucun autre aventurier sur cette tuile.'); return; }
-            openMenu('Cible', cands.map(c => ({ label: charMenuLabel(c), fn: () => emit({ targetId: c.id }) })));
+            targetChars(cands, '💚 ' + def.label + ' : cliquez l\'aventurier à cibler.');
             break;
         }
         case 'otherAny': {
             const cands = Game.state.characters.filter(c => c.id !== ac.id && !c.escaped && !c.dead && c.conscious);
             if (!cands.length) return;
-            openMenu('Inspirer quel aventurier ?', cands.map(c => ({ label: charMenuLabel(c, ' (' + escapeHtml(c.ownerId) + ')'), fn: () => emit({ targetId: c.id }) })));
+            targetChars(cands, '💚 ' + def.label + ' : cliquez l\'aventurier à inspirer.');
+            break;
+        }
+        case 'fireballDir': {
+            // A fireball blasts a WALL open : only the sides with no usable
+            // opening (or blocked by a locked door) are worth targeting.
+            const here = tileAt(ac.row, ac.col);
+            const cells = [];
+            for (let dir = 0; dir < 4; dir++) {
+                const blocked = !tileOpensToward(here, dir) || (here.doorLocked && here.doorDir === dir);
+                if (!blocked) continue;
+                cells.push({
+                    row: ac.row + DELTA[dir].r, col: ac.col + DELTA[dir].c,
+                    onPick: () => emit({ dir })
+                });
+            }
+            if (!cells.length) { Dialog.openSimpleDialog($('#simple-dialog'), 'Aucune paroi', 'Toutes les issues de cette tuile sont déjà ouvertes.'); return; }
+            startTargeting({
+                charId: ac.id, cls: 'tgt-orange', mark: '<i class="fas fa-burst"></i>',
+                title: '💥 Boule de feu : cliquez la paroi à faire exploser.', cells
+            });
             break;
         }
         case 'shadowDest': {
-            const cells = Object.keys(Game.state.board).filter(k => {
-                const t = Game.state.board[k];
-                return (t.kind === 'gloom' || t.state === 'dark') && !(t.row === ac.row && t.col === ac.col);
-            });
+            const cells = Object.keys(Game.state.board)
+                .map(k => Game.state.board[k])
+                .filter(t => (t.kind === 'gloom' || t.state === 'dark') && !(t.row === ac.row && t.col === ac.col))
+                .map(t => ({ row: t.row, col: t.col, onPick: () => emit({ destCell: cellKey(t.row, t.col) }) }));
             if (!cells.length) { Dialog.openSimpleDialog($('#simple-dialog'), 'Aucune destination', 'Aucune autre tuile Pénombre / Obscurité.'); return; }
-            openMenu('Réapparaître sur…', cells.map(k => {
-                const t = Game.state.board[k];
-                return { label: (TILE_INFO[t.kind] || {}).icon + ' ' + (TILE_INFO[t.kind] || {}).label + ' (' + k + ')', fn: () => emit({ destCell: k }) };
-            }));
+            startTargeting({
+                charId: ac.id, cls: 'tgt-purple', mark: '<i class="fas fa-moon"></i>',
+                title: '🌑 Marche de l\'Ombre : cliquez la tuile de réapparition.', cells
+            });
             break;
         }
     }
@@ -514,6 +570,44 @@ function moveDangerWarnings(tile, ac) {
     return warns;
 }
 
+const hasAbility = (c, id) => !!(c && c.abilities && c.abilities.some(a => a.id === id));
+
+/**
+ * How the active adventurer may step onto `tile` right now, for the board
+ * highlight :
+ *   'mv-ok'     (white)  — a plain 1 AP move ;
+ *   'mv-hard'   (orange) — costs 2 AP (suspended bridge, total darkness) ;
+ *   'mv-danger' (red)    — entering it may cost hit points (poison, trap,
+ *                          dragon, flames).
+ * Returns null when the tile is not a legal destination.
+ */
+function moveHighlightClass(tile, ac, here) {
+    const dir = dirBetween(ac.row, ac.col, tile.row, tile.col);
+    if (dir === null || dir === 'here') return null;
+    const connected = edgeConnected(here, dir, tile);
+    const sameAxisExit = tileOpensToward(here, dir) && tileOpensToward(tile, OPP(dir));
+    const elf = hasAbility(ac, 'elven-agility');
+
+    let cost;
+    if (tile.state === 'fire') {
+        // Only the Elf may walk into flames (and she takes no damage doing so).
+        if (!elf || !connected) return null;
+        cost = 1;
+    } else if (tile.kind === 'bridge') {
+        if (!connected) return null;
+        cost = elf ? 1 : 2;
+    } else if (tile.state === 'dark') {
+        if (!sameAxisExit) return null;
+        cost = hasAbility(ac, 'night-vision') ? 1 : 2;
+    } else if (connected) {
+        cost = 1;
+    } else {
+        return null;
+    }
+    if (moveDangerWarnings(tile, ac).length) return 'mv-danger';
+    return cost >= 2 ? 'mv-hard' : 'mv-ok';
+}
+
 // Run `doIt` (the actual move), but if the destination is dangerous, ask the
 // player to confirm first, recalling the hazard(s) awaiting the adventurer.
 function moveWithConfirm(tile, ac, doIt) {
@@ -527,6 +621,8 @@ function moveWithConfirm(tile, ac, doIt) {
 
 function onTileClick(tile) {
     showTileDesc(tile);
+    // While aiming an action, only the highlighted cells / tokens are actionable.
+    if (Game.targeting) return;
     if (!isMyTurn()) return;
     const ac = activeChar();
     if (!ac || !ac.conscious) return;
@@ -588,18 +684,101 @@ const EVENT_COLORS = {
 // Events that show a full illustration instead of an emoji icon.
 const EVENT_IMG = { dragon: portraitUrl('dragon') };
 
+// Large central toasts (bad events, hiding attempts, sudden death…). They are
+// queued so two announcements in the same state update play one after the other
+// instead of overwriting each other.
+function showBigToast(t) {
+    Game._toastQueue = Game._toastQueue || [];
+    Game._toastQueue.push(t);
+    if (!Game._toastBusy) playNextBigToast();
+}
+
+function playNextBigToast() {
+    const t = (Game._toastQueue || []).shift();
+    const $t = $('#event-toast');
+    if (!t) { Game._toastBusy = false; $t.css('display', 'none'); return; }
+    Game._toastBusy = true;
+    $t[0].style.setProperty('--toast-color', t.color || '#333');
+    $t.html(t.iconHtml + '<span class="toast-label">' + t.label + '</span>' +
+        (t.sub ? '<span class="toast-sub">' + t.sub + '</span>' : ''));
+    // Replay the pop animation on every toast (the element itself is reused).
+    $t.stop(true, false).removeClass('pop').css({ display: 'flex', opacity: 0 });
+    void $t[0].offsetWidth;
+    $t.addClass('pop').animate({ opacity: 1 }, 200);
+    clearTimeout(Game._toastTimer);
+    Game._toastTimer = setTimeout(() => $t.animate({ opacity: 0 }, 400, playNextBigToast), t.ms || 3000);
+}
+
 // Large central toast shown when a bad event occurs.
 function showEventToast(ev) {
     const info = EVENT_INFO[ev.type] || { icon: '🎴' };
-    const $t = $('#event-toast');
-    $t[0].style.setProperty('--toast-color', EVENT_COLORS[ev.type] || '#333');
-    const iconHtml = EVENT_IMG[ev.type]
-        ? '<img class="toast-img" src="' + EVENT_IMG[ev.type] + '" alt="">'
-        : '<span class="toast-icon">' + info.icon + '</span>';
-    $t.html(iconHtml + '<span class="toast-label">' + escapeHtml(ev.label || '') + '</span>');
-    $t.stop(true, true).css({ display: 'flex', opacity: 0 }).animate({ opacity: 1 }, 220);
-    clearTimeout(Game._toastTimer);
-    Game._toastTimer = setTimeout(() => $t.animate({ opacity: 0 }, 500, () => $t.css('display', 'none')), 3200);
+    showBigToast({
+        color: EVENT_COLORS[ev.type] || '#333',
+        iconHtml: EVENT_IMG[ev.type]
+            ? '<img class="toast-img" src="' + EVENT_IMG[ev.type] + '" alt="">'
+            : '<span class="toast-icon">' + info.icon + '</span>',
+        label: escapeHtml(ev.label || ''),
+        ms: 3200
+    });
+}
+
+// --- One-shot server feedback (fx queue) ------------------------------------
+// The server appends entries with an increasing `seq`; we only play what we have
+// not seen yet, so a reconnecting client silently skips the backlog.
+function processFx(state) {
+    const list = state.fx || [];
+    if (Game._fxSeq === undefined) {
+        Game._fxSeq = list.length ? list[list.length - 1].seq : 0;
+        return;
+    }
+    list.forEach(fx => {
+        if (fx.seq <= Game._fxSeq) return;
+        Game._fxSeq = fx.seq;
+        playFx(fx);
+    });
+}
+
+function playFx(fx) {
+    switch (fx.kind) {
+        case 'hide':
+            showBigToast(fx.success ? {
+                color: '#2f2f5e', iconHtml: '<span class="toast-icon">🫥</span>',
+                label: escapeHtml(fx.name) + ' se cache !',
+                sub: fx.auto ? 'Réussite automatique (3e essai)' : 'Jet de talent réussi (dé ' + fx.roll + ')',
+                ms: 2600
+            } : {
+                color: '#7a3a12', iconHtml: '<span class="toast-icon">👀</span>',
+                label: escapeHtml(fx.name) + ' reste visible',
+                sub: 'Échec de la dissimulation (dé ' + fx.roll + ')',
+                ms: 2600
+            });
+            break;
+        case 'sudden-death': {
+            const lines = [];
+            if (fx.killed && fx.killed.length) lines.push('💀 Dévorés : ' + escapeHtml(fx.killed.join(', ')));
+            if (fx.survived && fx.survived.length) lines.push('🕯️ Résistent : ' + escapeHtml(fx.survived.join(', ')));
+            if (!lines.length) break;
+            showBigToast({
+                color: '#1a1a1a', iconHtml: '<span class="toast-icon">💀</span>',
+                label: 'Mort subite', sub: lines.join('<br>'), ms: 5000
+            });
+            break;
+        }
+        case 'dragon-slain':
+            spawnDragonSlainFx(fx.row, fx.col);
+            break;
+    }
+}
+
+// Broken-heart burst over the cell where a Dragon has just been slain (same
+// visual language as the damage feedback on adventurers).
+function spawnDragonSlainFx(row, col) {
+    if (!Game._boardMin) return;
+    const { minR, minC } = Game._boardMin;
+    const $fx = $('<span class="hp-fx on-board dragon-slain"><i class="fas fa-heart-crack"></i></span>')
+        .css({ left: (col - minC) * CELL + CELL / 2 + 'px', top: (row - minR) * CELL + CELL / 2 + 'px' });
+    $('#board').append($fx);
+    setTimeout(() => $fx.remove(), 1600);
 }
 
 function maybeShowEventToast(state) {
@@ -644,6 +823,12 @@ function toggleUiMode(which) {
 
 function render(state) {
     maybeShowEventToast(state);
+    // A targeting in progress only makes sense for the adventurer that started
+    // it, while it is still our turn and nothing else is pending.
+    if (Game.targeting && (!isMyTurn() || state.pending || state.activeId !== Game.targeting.charId)) {
+        Game.targeting = null;
+        $('#target-bar').hide().empty();
+    }
     if (state.status !== 'PLAYING') renderEnd(state);
     renderHeader(state);
     renderParty(state);
@@ -656,6 +841,7 @@ function render(state) {
     $('#deck-count').text(state.deckLeft);
     renderFireballs(state);
     spawnHpFx(state);
+    processFx(state);
 }
 
 // Fireball counter (Pyromancer only) — shown next to kits / deck so the whole
@@ -982,6 +1168,31 @@ function renderBoard(state) {
         minC = Math.min(minC, g.col); maxC = Math.max(maxC, g.col);
     });
 
+    // Targeting mode : highlighted cells may sit outside the dungeon (a fireball
+    // aimed at an outer wall), so they extend the bounds too.
+    const tgt = Game.targeting;
+    if (tgt && tgt.cells) tgt.cells.forEach(t => {
+        minR = Math.min(minR, t.row); maxR = Math.max(maxR, t.row);
+        minC = Math.min(minC, t.col); maxC = Math.max(maxC, t.col);
+    });
+
+    // Movement helper : while it is our turn (and no modal / targeting is
+    // pending), every reachable neighbouring tile is outlined — white for a
+    // plain move, orange when it costs 2 AP, red when it may hurt.
+    const moveCls = {};
+    if (ac && isMyTurn() && ac.conscious && !state.pending && !tgt) {
+        const here = board[cellKey(ac.row, ac.col)];
+        if (here) {
+            for (let dir = 0; dir < 4; dir++) {
+                const nk = cellKey(ac.row + DELTA[dir].r, ac.col + DELTA[dir].c);
+                const nt = board[nk];
+                if (!nt) continue;
+                const cls = moveHighlightClass(nt, ac, here);
+                if (cls) moveCls[nk] = cls;
+            }
+        }
+    }
+
     const rows = maxR - minR + 1, cols = maxC - minC + 1;
     Game._boardMin = { minR, minC };   // used to place heal/damage fx over tokens
     const $board = $('#board').empty();
@@ -990,7 +1201,8 @@ function renderBoard(state) {
     keys.forEach(k => {
         const t = board[k];
         const $tile = $('<div></div>')
-            .addClass('tile kind-' + t.kind + ' state-' + t.state + (t.doorLocked ? ' door-locked' : ''))
+            .addClass('tile kind-' + t.kind + ' state-' + t.state + (t.doorLocked ? ' door-locked' : '') +
+                (moveCls[k] ? ' ' + moveCls[k] : ''))
             .css({ top: (t.row - minR) * CELL + 'px', left: (t.col - minC) * CELL + 'px', width: CELL + 'px', height: CELL + 'px' })
             .attr('title', tileFullLabel(t));
 
@@ -1038,7 +1250,10 @@ function renderBoard(state) {
             animateIfMoved($tok, $tile, 'd' + d.id, d.row, d.col, prevPos, curPos);
         });
         state.characters.filter(c => !c.escaped && !c.dead && c.row === t.row && c.col === t.col).forEach(c => {
-            const koCls = c.conscious ? '' : ' ko';
+            const koCls = (c.conscious ? '' : ' ko') + (c.hidden ? ' tok-hidden' : '');
+            // Green halo + click handler when this adventurer is a legal target
+            // of the action being aimed (heal, balm, inspiration…).
+            const asTarget = tgt && tgt.chars && tgt.chars.find(x => x.id === c.id);
             // Active token aura reflects the remaining action points :
             //  - blinking white while AP remain, steady once empty ;
             //  - red (overreach) after an Effort, steady red once empty.
@@ -1048,7 +1263,10 @@ function renderBoard(state) {
                 if (state.effortUsed) activeCls += ' aura-overreach';
                 if (state.ap <= 0) activeCls += ' aura-empty';
             }
-            const $tok = $('<span class="token char-token' + koCls + activeCls + '" style="background-image:url(' + portraitCardUrl(c.id) + ');border-color:' + c.color + '" title="' + c.name + ' (' + c.hp + '/' + c.maxHp + ')"></span>');
+            const $tok = $('<span class="token char-token' + koCls + activeCls + (asTarget ? ' tok-target' : '') +
+                '" style="background-image:url(' + portraitCardUrl(c.id) + ');border-color:' + c.color +
+                '" title="' + c.name + ' (' + c.hp + '/' + c.maxHp + ')' + (c.hidden ? ' — caché' : '') + '"></span>');
+            if (asTarget) $tok.on('click', (e) => { e.stopPropagation(); resolveTarget(asTarget.onPick); });
             $tile.append($tok);
             animateIfMoved($tok, $tile, 'c' + c.id, c.row, c.col, prevPos, curPos);
         });
@@ -1072,6 +1290,17 @@ function renderBoard(state) {
             $gh.addClass('ghost-hint').attr('title', 'Issue possible du donjon');
         }
         $board.append($gh);
+    });
+
+    // Targeted cells : a coloured overlay drawn above tiles / ghosts, clickable
+    // to validate the action (replaces the old coordinate menus).
+    if (tgt && tgt.cells) tgt.cells.forEach(t => {
+        const $ov = $('<div class="target-cell ' + (tgt.cls || '') + '"></div>')
+            .css({ top: (t.row - minR) * CELL + 'px', left: (t.col - minC) * CELL + 'px', width: CELL + 'px', height: CELL + 'px' })
+            .attr('title', tgt.title);
+        if (tgt.mark) $ov.append('<span class="tgt-mark">' + tgt.mark + '</span>');
+        $ov.on('click', (e) => { e.stopPropagation(); resolveTarget(t.onPick); });
+        $board.append($ov);
     });
 
     Game._tokenPos = curPos;
@@ -1257,7 +1486,8 @@ function renderActions(state) {
     }
 
     // Board hint
-    if (blockedByPending && state.pending.ownerId !== Player.id) $('#board-hint').text('Un joueur place une tuile…');
+    if (Game.targeting) $('#board-hint').text(Game.targeting.title.replace(/<[^>]+>/g, ''));
+    else if (blockedByPending && state.pending.ownerId !== Player.id) $('#board-hint').text('Un joueur place une tuile…');
     else if (blockedByPending) $('#board-hint').text('Choisissez l\'orientation de la tuile dans la fenêtre.');
     else if (my && ac && ac.conscious && running) $('#board-hint').text('Déplacement en cours (' + freeMoves + ' restant' + (freeMoves > 1 ? 's' : '') + ') : cliquez une tuile adjacente. Seul le déplacement est possible.');
     else if (my && ac && ac.conscious) $('#board-hint').text('Cliquez une tuile adjacente pour agir, ou un emplacement « + » pour explorer/découvrir.');
@@ -1275,8 +1505,21 @@ function renderEnd(state) {
     let summary = '';
     if (s.total !== undefined) {
         summary = 'Survivants échappés : ' + s.escaped + ' / ' + s.total + ' · Abandonnés : ' + s.abandoned + ' (dont morts : ' + s.dead + ')';
-        if (won) summary += ' · Partie terminée en ' + s.turns + ' tours.';
+        summary += ' · Partie terminée en ' + s.turns + ' tour' + (s.turns > 1 ? 's' : '') + '.';
     }
     $('#end-summary').text(summary);
+    $('#end-duration').html(s.durationMs != null
+        ? '<i class="fas fa-stopwatch"></i> Durée de la partie : <b>' + formatDuration(s.durationMs) + '</b>'
+        : '');
     $ov.fadeIn(300);
+}
+
+// "1 h 04 min 09 s" / "12 min 07 s" / "48 s"
+function formatDuration(ms) {
+    const total = Math.max(0, Math.round(ms / 1000));
+    const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+    const pad = (n) => (n < 10 ? '0' + n : '' + n);
+    if (h) return h + ' h ' + pad(m) + ' min ' + pad(s) + ' s';
+    if (m) return m + ' min ' + pad(s) + ' s';
+    return s + ' s';
 }

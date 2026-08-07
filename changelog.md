@@ -3,6 +3,50 @@
 All notable changes to Dungeon Escape are documented here.
 Versions use a calendar scheme: `vYYYY.MM.DD`.
 
+## v2026.08.07
+
+### Added
+- **Board targeting instead of modals**: actions that used to ask for coordinates
+  or a name in a dialog are now aimed directly on the board — the eligible cells
+  / adventurers light up and a single click validates.
+  - **Shadow Walk** (Hunter): candidate Gloom / Darkness tiles glow **purple**.
+  - **Fireball** (Pyromancer): the walls that can be blasted open glow **orange**
+    (sides already open are not offered).
+  - **Heal / Balm / Inspiration**: eligible adventurers get a pulsing **green**
+    halo on their token.
+  - A banner recalls what is being aimed and offers a way out (also `Escape`).
+- **Movement helper on the board**: while it is your turn, every tile you may
+  step onto is outlined — **white** for a plain move, **orange** when it costs
+  2 AP (suspended bridge, total darkness), **red** when entering may cost hit
+  points (trap, poison, dragon, flames).
+- **Hidden adventurers look hidden**: a successful *Se cacher* now fades the
+  token on the board too (on top of the mask badge on the character card).
+- **Hiding toasts**: a big central toast announces every attempt at hiding, with
+  the dice roll — success as well as failure.
+- **Sudden death toast**: the sudden-death announcement is followed by a toast
+  listing who was devoured by the darkness and who resisted (with their rolls).
+- **Slain Dragon animation**: a broken heart bursts over the tile when a Dragon
+  is slain, mirroring the damage feedback on adventurers.
+- **Game duration** is shown on the end-of-game screen.
+- **Illustrated rules**: every adventurer chapter now shows the character's full
+  illustration next to their abilities, and the Dragon bad-event chapter shows
+  the Dragon. Illustrations float beside the text and are lazy-loaded, so the
+  rules modal stays light until you scroll to them.
+
+### Changed
+- **Hiding lasts the whole round**: the *hidden* status is now cleared at the
+  start of the next round instead of right after the Dragon phase, so it also
+  protects during the Dragon phase **and** the bad-event phase that follows
+  (including a Dragon event).
+- **Mobile: the whole page scrolls.** Phone browsers keep an address bar and a
+  system button bar that ate into the viewport, hiding the top of the screen and
+  the "end turn" button with no way to reach them. On small screens the page now
+  scrolls as a whole (with a sticky header), the board keeping a bounded slice of
+  the viewport. The desktop layout is unchanged.
+- **Landscape phones: two-column rails.** When the screen is wider than tall, the
+  action / adventurer rails lay their round buttons out on two columns, which
+  roughly halves their height and keeps the "end turn" button in view.
+
 ## v2026.07.26
 
 ### Added

@@ -132,6 +132,7 @@ function initGame(room) {
     room.game = {
         status: GAME_STATUS.PLAYING,
         difficulty: room.difficulty,
+        startedAt: Date.now(),  // wall-clock start, reported in the end screen
         deck,
         board: { '0,0': start },
         reserveTile: deck.length ? deck.shift() : null, // Dwarf's "Rock memory" face-up tile
@@ -157,6 +158,8 @@ function initGame(room) {
         dragons: [],
         dragonSeq: 1,
         lockpickKits: LOCKPICK_KITS,
+        fx: [],                // client-side feedback queue (toasts / animations)
+        fxSeq: 0,
         log: []
     };
 
@@ -172,6 +175,18 @@ function difficultyLabel(d) {
 function pushLog(room, message) {
     room.game.log.push(message);
     if (room.game.log.length > 60) room.game.log.shift();
+}
+
+/**
+ * Queue a one-shot visual feedback for the clients (big toast, board animation).
+ * Each entry carries an increasing `seq` so a client only plays what it has not
+ * seen yet — and a reconnecting client simply skips the backlog.
+ */
+function pushFx(room, fx) {
+    const g = room.game;
+    fx.seq = ++g.fxSeq;
+    g.fx.push(fx);
+    if (g.fx.length > 12) g.fx.shift();
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +212,18 @@ function startRound(room) {
     g.queue = ordered;
     g.roundStartCount = ordered.length; // adventurers scheduled to play this round
     pushLog(room, '— Tour ' + g.round + ' —');
+
+    // Hiding lasts for the WHOLE round it was gained in : it must still protect
+    // during the Dragon phase AND the following bad-event phase (a Dragon event
+    // moves / spawns dragons too). So it is only cleared here, when the next
+    // round actually starts.
+    const wasHidden = g.characters.filter(c => c.hidden && !c.escaped && !c.dead);
+    if (wasHidden.length) {
+        for (const c of wasHidden) c.hidden = false;
+        pushLog(room, '👁️ ' + wasHidden.map(c => c.name).join(', ') +
+            (wasHidden.length > 1 ? ' ne sont plus cachés.' : ' n\'est plus caché.'));
+    }
+
     activateNext(room);
 }
 
@@ -769,12 +796,14 @@ function doHide(room, char, payload) {
     char.hideStreak = (char.hideStreak || 0) + 1;
     const auto = char.hideStreak >= 3;
     const roll = talent(char);
-    if (auto || roll.success) {
+    const success = auto || roll.success;
+    if (success) {
         char.hidden = true;
         pushLog(room, '🫥 ' + char.name + ' se cache' + (auto ? ' (réussite automatique).' : ' (dé ' + roll.value + ').'));
     } else {
         pushLog(room, '👀 ' + char.name + ' échoue à se cacher (dé ' + roll.value + ').');
     }
+    pushFx(room, { kind: 'hide', charId: char.id, name: char.name, success, auto, roll: roll.value });
     return { ok: true };
 }
 
@@ -819,6 +848,7 @@ function doAbility(room, char, payload) {
             spendAp(g, 1);
             g.dragons = g.dragons.filter(dr => dr.id !== dragon.id);
             pushLog(room, '⚔️ ' + char.name + ' terrasse un Dragon adjacent !');
+            pushFx(room, { kind: 'dragon-slain', row: dragon.row, col: dragon.col, by: char.name });
             return { ok: true };
         }
         case 'inspiration': {
@@ -1007,10 +1037,9 @@ function runDragonPhase(room, times = 1, reason = 'phase') {
         for (const dragon of g.dragons) moveOneDragon(room, dragon);
         g.dragons = g.dragons.filter(dr => !dr.remove);
     }
-    // Hiding only lasts for the round (cleared after the regular Dragon phase).
-    if (reason === 'phase') {
-        for (const c of g.characters) c.hidden = false;
-    }
+    // NOTE: hidden adventurers stay hidden here — the flag is cleared at the
+    // start of the next round (see startRound), so hiding also covers the bad
+    // event phase that follows this one.
 }
 
 function spawnDragon(room) {
@@ -1169,6 +1198,7 @@ function resolveSuddenDeath(room) {
     const g = room.game;
     g.currentEvent = { type: 'sudden-death', label: 'Mort subite', doubled: false };
     pushLog(room, '💀 MORT SUBITE : les ténèbres envahissent le Donjon !');
+    const killed = [], survived = [];
     for (const c of g.characters) {
         if (c.escaped || c.dead) continue;
         const tile = tileAt(g, c.row, c.col);
@@ -1178,11 +1208,14 @@ function resolveSuddenDeath(room) {
             c.dead = true;
             c.conscious = false;
             c.hp = 0;
+            killed.push(c.name + ' (dé ' + roll.value + ')');
             pushLog(room, '💀 ' + c.name + ' est dévoré par les ténèbres (dé ' + roll.value + ').');
         } else {
+            survived.push(c.name + ' (dé ' + roll.value + ')');
             pushLog(room, '🕯️ ' + c.name + ' résiste aux ténèbres (dé ' + roll.value + ').');
         }
     }
+    pushFx(room, { kind: 'sudden-death', killed, survived });
 }
 
 // ---------------------------------------------------------------------------
@@ -1203,7 +1236,10 @@ function checkGameEnd(room) {
 
     // No conscious adventurer left to act : resolve the outcome.
     const abandoned = total - escaped; // unconscious + dead left in the dungeon
-    g.endStats = { escaped, abandoned, dead, total, turns: g.round };
+    g.endStats = {
+        escaped, abandoned, dead, total, turns: g.round,
+        durationMs: g.startedAt ? Math.max(0, Date.now() - g.startedAt) : null
+    };
 
     if (escaped === 0) {
         g.status = GAME_STATUS.LOST;
@@ -1298,6 +1334,7 @@ function buildState(room) {
         interrupt: g.interruptStack.length > 0,
         rank: g.rank || null,
         endStats: g.endStats || null,
+        fx: g.fx,
         log: g.log
     };
 }

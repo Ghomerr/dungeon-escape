@@ -59,7 +59,10 @@ $(document).ready(() => {
             .then(r => r.text())
             .then(md => {
                 const html = window.marked.parse ? window.marked.parse(md) : window.marked(md);
-                $d.find('.markdown-body').html(html);
+                const $body = $d.find('.markdown-body').html(html);
+                // The rules embed full-size illustrations: only fetch the ones
+                // actually scrolled into view.
+                $body.find('img').attr({ loading: 'lazy', decoding: 'async' });
             })
             .catch(() => $d.find('.markdown-body').html('<p>Impossible de charger le document.</p>'));
     };

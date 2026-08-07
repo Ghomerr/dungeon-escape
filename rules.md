@@ -3,25 +3,25 @@
 Le jeu est composé de 64 tuiles **Donjon** qui seront tirées aléatoirement par les joueurs pour former le **Donjon** lors de leur exploration. 
 
 * Liste des 64 tuiles du **Donjon** : 
-    * Cul de sac simples : 2 tuiles - (OK image 1)
-    * Couloirs simples : 4 tuiles - (OK image 1)
-    * Carrefours simples (4 directions) : 3 tuiles - (OK image 1)
-    * Couloirs en T simple (3 directions) : 3 tuiles - KO (pas de tuiles)
-    * Coude simple (2 directions) : 4 tuiles - KO (pas de tuiles)
-    * **Ponts suspendus** : 3 tuiles : OK
-    * Couloirs avec **Porte verrouillée** dans le sens **avant** de marche : 3 tuiles : KO (1 tuile)
-    * Couloirs avec **Porte verrouillée** dans le sens **arrière** de marche : 3 tuiles : KO (pas de tuile)
-    * Carrefours avec **Plaque piégée** : 3 tuiles - Partiel (Ok mais pas de flèche, juste des piques autour)
-    * Couloirs en T **Inflammables** : 8 tuiles (mais valeurs de dés différentes) - 
+    * Cul de sac simples : 2 tuiles
+    * Couloirs simples : 4 tuiles
+    * Carrefours simples (4 directions) : 3 tuiles
+    * Couloirs en T simple (3 directions) : 3 tuiles
+    * Coude simple (2 directions) : 4 tuiles
+    * **Ponts suspendus** : 3 tuiles
+    * Couloirs avec **Porte verrouillée** dans le sens **avant** de marche : 3 tuiles
+    * Couloirs avec **Porte verrouillée** dans le sens **arrière** de marche : 3 tuiles
+    * Carrefours avec **Plaque piégée** : 3 tuiles
+    * Couloirs en T **Inflammables** : 8 tuiles (mais valeurs de dés différentes)
     > 1-3, 1-4, 1-5, 1-6, 2-3, 2-4, 2-5, 2-6, 3-5, 3-6, 4-5, 4-6.
-    * Coudes **Inflammables** : 4 tuiles (mais valeurs de dés différentes) - KO (1 tuile)
-    * Coudes **Nauséabonds** : 6 tuiles - OK
-    * Couloirs en T **Nauséabonds** : 2 tuiles - OK
-    * Couloirs dans la **Pénombre** : 4 tuiles - OK
-    * Couloirs en T dans la **Pénombre** : 2 tuiles - OK 
-    * Carrefours dans la **Pénombre** : 2 tuiles - KO
-    * Cul de sac **"Antre de dragon"** : 6 tuiles - OK
-    * Coudes **"Antre de dragon"** : 2 tuiles - KO
+    * Coudes **Inflammables** : 4 tuiles (mais valeurs de dés différentes)
+    * Coudes **Nauséabonds** : 6 tuiles
+    * Couloirs en T **Nauséabonds** : 2 tuiles
+    * Couloirs dans la **Pénombre** : 4 tuiles
+    * Couloirs en T dans la **Pénombre** : 2 tuiles
+    * Carrefours dans la **Pénombre** : 2 tuiles
+    * Cul de sac **"Antre de dragon"** : 6 tuiles
+    * Coudes **"Antre de dragon"** : 2 tuiles
 
 Il y a en plus : une tuile de **Départ** et une tuile de **Sortie**.
 
@@ -89,9 +89,9 @@ Les tours se poursuivent jusqu'à ce que l'un des événement suivants se produi
  * Tous les **aventuriers** sont inconscients (à cause des **Dragons** ou des pièges).
 
 La partie est gagnée avec un rang qui dépend du nombre d'**aventuriers** abandonnés dans le **Donjon** : 
-    * **Or** : 0 **aventurier** abandonné.
-    * **Argent** : 1 **aventurier** abandonné.
-    * **Bronze** : 2 **aventuriers** abandonnés.
+ * **Or** : 0 **aventurier** abandonné.
+ * **Argent** : 1 **aventurier** abandonné.
+ * **Bronze** : 2 **aventuriers** abandonnés.
 
 La partie est perdue si 3 **aventuriers** ou plus sont **inconscients** et que les autres sont sortis du **Donjon**.
 
@@ -178,6 +178,8 @@ Si des **aventuriers** se trouvent sur ces tuiles, ils perdent immédiatement 3 
 Rappel : les **aventuriers** ne peuvent pas se déplacer à travers un incendie. Ils peuvent l'éteindre avec l'action "**Éteindre un incendie**" (pour 2 points d'actions).
 
 ## Dragon
+![Dragon](static/assets/adventurers/dragon.png)
+
 Tous les **Dragons** déjà présents dans le **Donjon** se déplacent d'une tuile vers l'aventurier le plus proche.
 
 S'il y a moins de 3 **Dragons** dans le **Donjon**, un nouveau Dragon est ajouté. On place un **Dragon** sur la tuile **Antre de dragons** la plus proche d'un **aventurier** conscient.
@@ -285,48 +287,64 @@ Pendant un **événement fâcheux** **Dragon** ou la phase **Dragon**, pour chaq
 Il existe 8 aventuriers différents proposés pour explorer le **Donjon**. Ils possèdent tous un nombre de points de vie définis et des capacités spéciales, passives ou qui requièrent un nombre de points d'actions (PA).
 
 ## Chasseur de l'Ombre
+![Chasseur de l'Ombre](static/assets/adventurers/shadow-hunter.png)
+
 * 3 points de vie
 * Niveau 1
 * **Marche de l'Ombre** (2 PA) : sur une tuile **Prénombre** ou **Obscurité totale**, le **Chasseur de l'Ombre** disparaît du plateau et au prochain tour, comme seule action, il peut réapparaître sur une autre tuile **Pénombre** ou **Obscurité totale** de son choix.
 * **Vision nocturne** (Passif) : les tuiles **Obscurité totale** ne font perdre aucun point de vie et le **Chasseur de l'Ombre** peut y entrer en utilisant l'action **Déplacer** normalement.
 
 ## Gnome
+![Gnome](static/assets/adventurers/gnome.png)
+
 * 3 points de vie
 * Niveau 2
 * **Repli stratégique** (Passif) : jusqu'à 3 fois maximum par partie, le **Gnome** peut défausser la tuile piochée lors d'une action **Explorer le Donjon** ou **Découvrir le Donjon** et piocher la tuile suivante (qui doit être acceptée).
 * **Furtivité** (Passif) : ne peut pas être poursuivi par un **Dragon** ni même être attaqué par ce dernier en étant sur la même tuile.
 
 ## Nain
+![Nain](static/assets/adventurers/dwarf.png)
+
 * 3 points de vie
 * Niveau 3
 * **Mémoire de la roche** (Passif) : en début de partie, la première tuile est mise de côté, face visible pour tous les joueurs. Ensuite, quand le **Nain** utilise les actions **Découvrir le Donjon** ou **Explorer le Donjon**, il peut choisir de placer la tuile piochée ou celle mise de côté. Celle qui reste est conservée face visible.
 * **Maîtrise des flammes** (1 PA) : éteint un incendie sur sa tuile ou une tuile adjacente.
 
 ## Pyromancien
+![Pyromancien](static/assets/adventurers/pyromancer.png)
+
 * 3 points de vie
 * Niveau 4
 * **Boule de feu** (2 PA) : jusqu'à 3 fois par partie, donne la possibilité de détruire une paroie du Donjon. Cela déclenche immédiatement un **événement Incendie** à résoudre dans les conditions habituelles.
 * **Résistance aux flammes** (Passif) : les tuiles **Incendies** ne font perdre qu'un seul point de vie (au lieu de 3 aux autres aventuriers).
 
 ## Elfe Roublard
+![Elfe Roublard](static/assets/adventurers/elf-rogue.png)
+
 * 3 points de vie
 * Niveau 5 
 * **Crochetage des portes** (1 PA) : dans la limite des **kits de crochetage** disponibles, les portes verrouillées peuvent être déverrouillées.
 * **Agilité eflique** (Passif) : possibilité d'entrer sur les tuiles **Ponts suspendus** ou **Incendies** pour un point d'action et sans dégâts.
 
 ## Druide
+![Druide](static/assets/adventurers/druid.png)
+
 * 3 points de vie
 * Niveau 6
 * **Application de beaume** (1 PA) : restaure 1 point de vie à autre aventurier situé sur la même tuile.
 * **Célérité animale** (1 PA) : permet de faire deux actions **se Déplacer**.
 
 ## Paladin 
+![Paladin](static/assets/adventurers/paladin.png)
+
 * 5 points de vie
 * Niveau 7
 * **Combattre le mal** (1 PA) : élimine un **Dragon** situé sur une tuile adjacente.
 * **Sacrifice** (Passif) : grâce à sa constitution hors du commun, le **Paladin** dispose de plus de points de vie. Les autres **aventuriers** situés sur la même tuile que lui ne perdront pas de points de vie lors des **événements fâcheux** suivants : **Obscurité totale**, **Poison**, **Incendie** et **Maldédiction**.
 
 ## Barde 
+![Barde](static/assets/adventurers/bard.png)
+
 * 3 points de vie
 * Niveau 8
 * **Inspiration** (1 PA) : joue du Luth pour donner une action immédiate d'un point d'action à un autre aventurier.
