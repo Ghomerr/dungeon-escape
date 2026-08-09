@@ -6,6 +6,20 @@ Versions use a calendar scheme: `vYYYY.MM.DD`.
 ## v2026.08.10
 
 ### Added
+- **Guided tour ("didacticiel")**: a baby dragon walks a player through the whole
+  interface. Each step spotlights one element of the screen (everything else is
+  dimmed) while the dragon explains it in a speech bubble — the dungeon and its
+  "+" openings, the party rail, action points, the three action groups, the
+  movement colour code, the event box, the doom counter, the shared resources,
+  the journal and the end-turn / Effort buttons. It opens on the objectives and
+  the win / lose conditions, and closes on the Dragon phase.
+  - Enabled from a **checkbox in the waiting room**, ticked by default. The
+    choice is per player, saved in local storage, and never proposed again once
+    unticked (the tour itself also carries a "don't show again" box).
+  - Replayable at any time from the **Didacticiel** button in the game header,
+    and dismissable with `Escape` or "Passer".
+  - Steps whose target is not on screen are skipped, so the tour adapts to the
+    current layout and to the abilities of the active adventurer.
 - **Out-of-AP shortcuts on the board**: when the active adventurer runs out of
   action points, an **Effort** and an **End turn** button appear right under
   their token (same round buttons as the compact rail). They disappear once used
@@ -24,7 +38,8 @@ Versions use a calendar scheme: `vYYYY.MM.DD`.
   used everywhere, extended on desktop by a label plate welded to its right
   (rounded on the far side). The lightning pips move from under the icon to
   after the label, followed by "PA". Passive abilities use the very same pill
-  with a dashed outline, so they line up with the active ones.
+  with a dashed outline, so they line up with the active ones. Pills and section
+  headings are kept tight so the whole actions rail still fits a 900 px screen.
 - **Round adventurer portraits** in the left rail, in both compact and detailed
   cards. The compact card shows the face crop (much more readable in a small
   circle); the full illustration stays for the detailed card.
@@ -32,11 +47,32 @@ Versions use a calendar scheme: `vYYYY.MM.DD`.
   the "3 / 3 PV" count under it) instead of a small portrait and a text count.
 
 ### Fixed
+- **The guided tour now actually opens.** It waited for a board render that never
+  came: no `game-state` is broadcast between "everyone is ready" and the first
+  action, so the tour is started when the waiting overlay clears.
+- **Landscape phones get the compact (two-column) rails again.** The layout was
+  picked on width alone, so a 915×412 phone counted as a roomy desktop and got
+  the detailed rails it has no room for. Height is now part of the test.
+- **The service worker no longer serves stale CSS / JS on localhost**: its
+  cache-first rule is bypassed on `localhost` / `127.0.0.1`, where it made edited
+  stylesheets look broken until a hard reload.
 - **Heal / damage animations are pinned to the token**, not to the middle of the
   tile: with two adventurers standing on the same tile, the feedback now pops
   over the right one.
 - **Mobile: the side rails reach the bottom of the screen** instead of stopping
   under their last button.
+
+### Tooling
+- **`tools/devcheck.js` — automated in-browser check.** One command boots the
+  server, drives a headless Chrome through the lobby into a real solo game (one
+  player controlling four adventurers), walks the guided tour, then screenshots
+  the desktop / mobile-portrait / mobile-landscape layouts and the character
+  modal. It reports console errors, uncaught exceptions, failed requests,
+  oversized images, horizontal overflow and controls that nothing can scroll to.
+  No dependency: Chrome is driven over the DevTools Protocol with Node's own
+  `fetch` and `WebSocket`. Screenshots land in `tools/.devcheck/` (gitignored).
+  The three bugs fixed above were all found by this harness rather than by
+  reading the diff.
 
 ## v2026.08.09
 

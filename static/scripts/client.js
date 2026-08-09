@@ -42,6 +42,13 @@ $(document).ready(() => {
         .then(d => $('#version-tag').text(d.version))
         .catch(() => {});
 
+    // Guided-tour opt-in : purely local to this player / browser, shared with the
+    // game page through the same localStorage key. Ticked by default.
+    const TUTO_KEY = 'de-tutorial';
+    $('#wr-tutorial')
+        .prop('checked', localStorage.getItem(TUTO_KEY) !== 'off')
+        .change(function () { localStorage.setItem(TUTO_KEY, this.checked ? 'on' : 'off'); });
+
     // Live markdown viewers (rules + changelog).
     $('#rules-link').on('click', (e) => { e.preventDefault(); Dialog.openMarkdown('rules.md', '📖 Règles du jeu'); });
     $('#version-link').on('click', () => Dialog.openMarkdown('changelog.md', '📜 Changelog'));

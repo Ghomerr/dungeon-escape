@@ -250,6 +250,20 @@ button.primary:hover:not(:disabled) { background: linear-gradient(to bottom, #e0
 .difficulty-desc { margin-top: 8px; min-height: 2.4em; }
 .diff-btn.active { background: linear-gradient(to bottom, #c79a47, #9c7327); color: #1c1208; font-weight: bold; }
 
+/* Guided-tour opt-in (waiting room) — a per-player, local-only choice. */
+.tuto-optin {
+    margin-top: 14px; padding: 9px 11px;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+}
+.tuto-optin label { display: flex; align-items: center; gap: 9px; cursor: pointer; font-size: .9rem; }
+.tuto-optin input { accent-color: var(--gold); cursor: pointer; flex: 0 0 auto; }
+.tuto-optin b { color: var(--gold-light); }
+.tuto-optin-dragon {
+    width: 34px; height: 34px; flex: 0 0 auto; border-radius: 50%;
+    background: #1a140d; border: 1px solid var(--gold);
+}
+.tuto-optin .hint { margin-top: 5px; font-size: .76rem; }
+
 .emoji-bar { margin: 14px 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .emoji-send { font-size: 1.1rem; padding: 4px 8px; }
 .emoji-bubble { font-weight: bold; color: var(--gold-light); margin-left: 8px; }

@@ -1,7 +1,11 @@
 /* Dungeon Escape — minimal PWA service worker.
    Goal: make the app installable and load static assets fast. The game itself
    needs a live socket.io connection, so real-time traffic is never intercepted. */
-const CACHE = 'dungeon-escape-v4';
+const CACHE = 'dungeon-escape-v6';
+
+// On a developer machine the cache is pure nuisance: an edited stylesheet keeps
+// being served from yesterday's copy. Detected once, used by the fetch handler.
+const DEV_HOST = ['localhost', '127.0.0.1', '::1'].includes(self.location.hostname);
 
 // App shell + core static assets worth pre-caching. Kept small on purpose;
 // everything else is cached lazily on first fetch.
@@ -19,6 +23,7 @@ const CORE = [
 ];
 
 self.addEventListener('install', (e) => {
+    if (DEV_HOST) { self.skipWaiting(); return; }
     e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).then(() => self.skipWaiting()));
 });
 
@@ -38,6 +43,10 @@ self.addEventListener('fetch', (e) => {
     // Never touch same-origin realtime traffic or cross-origin requests.
     if (url.origin !== self.location.origin) return;
     if (url.pathname.startsWith('/socket.io')) return;
+    // Local development: never serve from the cache. The cache-first rule below
+    // would otherwise hand back yesterday's CSS / JS after an edit, which reads
+    // exactly like a styling bug.
+    if (DEV_HOST) return;
 
     // Navigations (HTML): network-first so a running server always wins, with a
     // cached shell as offline fallback.

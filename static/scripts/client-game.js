@@ -201,8 +201,13 @@ $(document).ready(() => {
     $('#party-toggle').click(() => toggleUiMode('party'));
     $('#actions-toggle').click(() => toggleUiMode('actions'));
 
-    // Escape leaves the board targeting mode (fireball, shadow walk, heal…).
-    $(document).on('keydown', (e) => { if (e.key === 'Escape') cancelTargeting(); });
+    // Escape closes the guided tour, else leaves the board targeting mode
+    // (fireball, shadow walk, heal…).
+    $(document).on('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (Tuto.active) { endTutorial(); return; }
+        cancelTargeting();
+    });
 
     Socket.emit('join-game', { roomId: Player.roomId, userId: Player.id, token: Player.token });
 
@@ -233,6 +238,15 @@ $(document).ready(() => {
     // Host-only : end a paused game right away.
     $('#pause-end-btn').click(() => {
         Socket.emit('end-game-early', { roomId: Player.roomId, ownerId: Player.id, token: Player.token });
+    });
+
+    // --- Guided tour -------------------------------------------------------
+    $('#tuto-link').click(() => startTutorial());
+    $('#tuto-next').click(() => tutoGo(1));
+    $('#tuto-prev').click(() => tutoGo(-1));
+    $('#tuto-skip').click(() => endTutorial());
+    $('#tuto-optout').prop('checked', !tutorialEnabled()).change(function () {
+        localStorage.setItem(TUTO_KEY, this.checked ? 'off' : 'on');
     });
 
     // Live markdown viewers (rules + changelog), available during the game.
@@ -291,7 +305,10 @@ window.addEventListener('beforeunload', () => {
 // --- Socket events ---------------------------------------------------------
 
 Socket.on('ready-players-amount', (d) => { $('#waiting-sub').hide(); $('#pause-end-btn').hide(); $('#waiting-text').text(d.readyPlayersAmout + ' / ' + d.totalPlayers + ' joueurs prêts…'); });
-Socket.on('all-players-ready-to-play', () => $('#waiting-overlay').fadeOut(300));
+// The guided tour waits for this overlay to clear. No further `game-state` is
+// broadcast until somebody actually plays, so the tour must be kicked off from
+// here too — the render hook alone would never fire on a freshly started game.
+Socket.on('all-players-ready-to-play', () => $('#waiting-overlay').fadeOut(300, maybeStartTutorial));
 
 function showPauseOverlay(d) {
     const names = (d.missingNames && d.missingNames.length) ? d.missingNames.join(', ') : (d.missingPlayers + ' joueur(s)');
@@ -829,7 +846,10 @@ function maybeShowEventToast(state) {
 
 // --- Rail display modes (compact icons ↔ detailed with names) --------------
 
-const WIDE_UI = () => window.innerWidth >= 900;
+// "Roomy" means wide AND tall enough: a phone held in landscape is 900+ px wide
+// but far too short for the detailed rails — it gets the compact ones (which the
+// CSS then lays out on two columns).
+const WIDE_UI = () => window.innerWidth >= 900 && window.innerHeight >= 560;
 // The preference is remembered per layout: collapsing a rail on a phone must not
 // leave the desktop stuck in compact mode. A roomy screen therefore always opens
 // with both rails fully expanded unless they were collapsed *while* roomy.
@@ -894,6 +914,10 @@ function render(state) {
     renderFireballs(state);
     spawnHpFx(state);
     processFx(state);
+    maybeStartTutorial();
+    // The board is rebuilt on every state: re-aim the spotlight at the (new)
+    // element it was pointing to.
+    if (Tuto.active) requestAnimationFrame(tutoPlace);
 }
 
 // Fireball counter (Pyromancer only) — shown next to kits / deck so the whole
@@ -1639,4 +1663,256 @@ function formatDuration(ms) {
     if (h) return h + ' h ' + pad(m) + ' min ' + pad(s) + ' s';
     if (m) return m + ' min ' + pad(s) + ' s';
     return s + ' s';
+}
+
+// ---------------------------------------------------------------------------
+// Guided tour ("didacticiel")
+//
+// A baby dragon walks a first-time player through the interface: each step
+// spotlights one element of the screen (everything else is dimmed) and the
+// dragon explains it in a speech bubble. Steps whose target is absent from the
+// DOM are skipped, so the tour adapts to the current layout (compact rails,
+// abilities of the active adventurer…).
+// ---------------------------------------------------------------------------
+
+const TUTO_KEY = 'de-tutorial';
+const tutorialEnabled = () => localStorage.getItem(TUTO_KEY) !== 'off';
+
+// `sel` is optional: a step without it is shown centred, with no spotlight.
+const TUTO_STEPS = [
+    {
+        title: 'Bienvenue dans le Donjon !',
+        html: '<p>Salut ! Je suis le <b>bébé dragon</b> du Donjon, et je vais t\'expliquer comment on s\'en échappe.</p>' +
+            '<p><b>Le but :</b> vous êtes une équipe d\'aventuriers enfermés dans un donjon qui se construit au fur et à mesure ' +
+            'que vous l\'explorez. Il faut trouver la tuile <b>Sortie</b> 🚪 et y amener un maximum d\'aventuriers.</p>' +
+            '<p><b>C\'est un jeu coopératif</b> : vous gagnez ou perdez ensemble.</p>'
+    },
+    {
+        title: 'Le temps vous est compté',
+        html: '<p>À la fin de chaque tour, une carte <b>Événement fâcheux</b> est piochée : incendie, poison, malédiction, ' +
+            'obscurité, dragons…</p>' +
+            '<p>Quand la pioche d\'événements est vide, c\'est la <b>Mort subite</b> 💀 : chaque aventurier encore dans le ' +
+            'Donjon fait un jet de talent à chaque tour, et disparaît définitivement en cas d\'échec.</p>' +
+            '<p><b>Victoire</b> si au moins un aventurier sort et que moins de 3 sont abandonnés (rang 🥇 0 abandonné, ' +
+            '🥈 1, 🥉 2). <b>Défaite</b> si personne ne sort, ou si 3 aventuriers ou plus restent derrière.</p>'
+    },
+    {
+        sel: '#board',
+        title: 'Le Donjon',
+        html: '<p>Voici le Donjon. Il ne contient au départ que la tuile de <b>Départ</b> 🟢 : tout le reste est à découvrir.</p>' +
+            '<p>Les couloirs doivent se correspondre d\'une tuile à l\'autre — on ne traverse jamais un mur.</p>' +
+            '<p><b>Clique sur une tuile</b> pour lire ce qu\'elle fait, et sur une tuile voisine pour agir dessus.</p>'
+    },
+    {
+        sel: '#board .ghost-active',
+        title: 'Agrandir le Donjon',
+        html: '<p>Ces emplacements <b>« + »</b> sont les issues de ta tuile qui ne mènent encore nulle part.</p>' +
+            '<p>Clique dessus pour <b>Découvrir</b> (poser une tuile, 1 PA) ou <b>Explorer</b> (poser la tuile ET entrer dessus, ' +
+            '1 PA aussi — bien plus rentable !).</p>'
+    },
+    {
+        sel: '#party-list',
+        title: 'Ton équipe',
+        html: '<p>Tous les aventuriers de la partie, dans l\'ordre de jeu du tour. Chacun a ses <b>points de vie</b>, ' +
+            'son <b>niveau</b> et ses <b>capacités</b>.</p>' +
+            '<p>Une flèche dorée pointe celui qui joue. <b>Clique sur une carte</b> pour voir sa fiche complète.</p>' +
+            '<p>⚠️ Le niveau compte : à distance égale, un dragon fonce sur l\'aventurier du <b>niveau le plus faible</b>.</p>'
+    },
+    {
+        sel: '#turn-info',
+        title: 'À qui de jouer ?',
+        html: '<p>Ici tu vois le <b>tour en cours</b>, l\'aventurier actif, ses <b>points d\'action</b> restants et sa place ' +
+            'dans l\'ordre du tour.</p>' +
+            '<p>Chaque aventurier dispose de <b>2 points d\'action (PA)</b> à son tour. À toi de bien les dépenser !</p>'
+    },
+    {
+        sel: '#base-actions',
+        title: 'Les actions de base',
+        html: '<p><b>Découvrir</b> (1 PA) pose une tuile. <b>Explorer</b> (1 PA) la pose et t\'y emmène. ' +
+            '<b>Se déplacer</b> (1 PA) va sur une tuile déjà posée.</p>' +
+            '<p><b>Courir</b> (2 PA) offre 3 déplacements d\'un coup, et <b>Soigner</b> (2 PA) rend 1 PV à toi-même ' +
+            'ou à un compagnon de ta tuile.</p>'
+    },
+    {
+        sel: '#dungeon-actions',
+        title: 'Les actions Donjon',
+        html: '<p>Certaines tuiles exigent une action dédiée : <b>Marcher dans l\'Obscurité</b> et <b>Marcher en équilibre</b> ' +
+            '(les ponts suspendus) coûtent 2 PA.</p>' +
+            '<p><b>Éteindre un incendie</b> libère une tuile en feu, <b>Crocheter une porte</b> ouvre une porte verrouillée ' +
+            '(jet de talent, un kit consommé seulement en cas de réussite).</p>' +
+            '<p><b>Se cacher</b> te rend invisible aux dragons jusqu\'au tour suivant — réussite automatique au 3ᵉ essai d\'affilée.</p>'
+    },
+    {
+        sel: '#ability-actions',
+        title: 'Les capacités',
+        html: '<p>Chaque aventurier a deux capacités qui lui sont propres : elles font toute la différence.</p>' +
+            '<p>Les <b>actives</b> se déclenchent contre des PA. Les <b>passives</b> (bouton en pointillés) sont toujours ' +
+            'là — clique dessus pour lire ce qu\'elles font.</p>'
+    },
+    {
+        sel: '#board',
+        title: 'Se déplacer sur le plateau',
+        html: '<p>Pendant ton tour, les tuiles où tu peux aller sont surlignées :</p>' +
+            '<p><b style="color:#fff">Blanc</b> = déplacement simple (1 PA). ' +
+            '<b style="color:#ffb45c">Orange</b> = 2 PA (pont, obscurité totale). ' +
+            '<b style="color:#ff6a5c">Rouge</b> = danger, tu risques d\'y perdre des points de vie !</p>' +
+            '<p>Certaines actions (boule de feu, soin, téléportation…) surlignent aussi leurs cibles : il suffit de cliquer.</p>'
+    },
+    {
+        sel: '#event-box',
+        title: 'L\'événement en cours',
+        html: '<p>L\'événement fâcheux du tour s\'affiche ici. Une carte <b>×2</b> applique ses effets deux fois !</p>' +
+            '<p>Le <b>Poison</b> reste actif jusqu\'au prochain événement, le <b>Feu</b> bloque le passage tant qu\'il n\'est ' +
+            'pas éteint, et l\'<b>Obscurité</b> rend les tuiles Pénombre infranchissables sans l\'action dédiée.</p>'
+    },
+    {
+        sel: '#turns-left',
+        title: 'Le compte à rebours',
+        html: '<p>Le nombre de tours qu\'il reste avant la <b>Mort subite</b>. Quand il tombe à zéro, chaque tour devient ' +
+            'un jet de talent pour survivre.</p>' +
+            '<p>Ne traînez pas : explorer vite, c\'est explorer moins souvent en panique.</p>'
+    },
+    {
+        sel: '.resources',
+        title: 'Les ressources de l\'équipe',
+        html: '<p>🔑 Les <b>kits de crochetage</b> (6 pour toute la partie), 🃏 les tuiles restant dans la <b>pioche</b>, ' +
+            'et 🔥 les <b>boules de feu</b> du Pyromancien s\'il est de la partie.</p>' +
+            '<p>Ces ressources sont communes : parlez-vous avant de les gaspiller !</p>'
+    },
+    {
+        sel: '#journal-btn',
+        title: 'Le journal',
+        html: '<p>Tout ce qui se passe est consigné ici : jets de dés, dégâts, découvertes. Un badge te signale ' +
+            'les nouvelles lignes.</p>' +
+            '<p>Le bouton juste à côté envoie un <b>emoji</b> aux autres joueurs.</p>'
+    },
+    {
+        sel: '#endturn-btn',
+        title: 'Finir ton tour',
+        html: '<p>Quand tu n\'as plus rien à faire, passe la main. Si tu as encore des PA, le jeu te demandera confirmation.</p>' +
+            '<p>Le bouton <b>Effort</b> 💪 donne <b>+1 PA</b> immédiatement, mais un jet de talent raté en fin de tour ' +
+            'te coûtera 1 point de vie. À utiliser quand ça compte !</p>' +
+            '<p>Quand tes PA sont épuisés, ces deux boutons apparaissent aussi <b>directement sous ton jeton</b>.</p>'
+    },
+    {
+        title: 'Attention aux Dragons 🐉',
+        html: '<p>Après que tout le monde a joué, les <b>Dragons</b> présents avancent d\'une tuile vers l\'aventurier ' +
+            'le plus proche (le plus faible en cas d\'égalité).</p>' +
+            '<p>Un dragon sur ta tuile, et tu tombes <b>inconscient</b> sur-le-champ : 0 PV. Un aventurier inconscient ' +
+            'ne joue plus — il faut qu\'un compagnon vienne le soigner.</p>' +
+            '<p>Pour leur échapper : <b>Se cacher</b>, s\'éloigner de plus de 7 tuiles… ou le Paladin qui les terrasse !</p>'
+    },
+    {
+        title: 'À toi de jouer !',
+        html: '<p>Tu sais l\'essentiel. Les <b>Règles</b> complètes restent accessibles en haut de l\'écran, ' +
+            'et tu peux relancer ce didacticiel quand tu veux avec le bouton 🐲 <b>Didacticiel</b>.</p>' +
+            '<p>Bonne chance… vous allez en avoir besoin. 🔥</p>'
+    }
+];
+
+const Tuto = { steps: [], i: 0, active: false };
+
+function startTutorial() {
+    // Keep only the steps whose target is actually on screen right now.
+    Tuto.steps = TUTO_STEPS.filter(s => {
+        if (!s.sel) return true;
+        const $el = $(s.sel);
+        return $el.length > 0 && $el.is(':visible');
+    });
+    if (!Tuto.steps.length) return;
+    Tuto.i = 0;
+    Tuto.active = true;
+    $('#tuto-optout').prop('checked', !tutorialEnabled());
+    $('#tutorial').css('display', 'block');
+    $(window).on('resize.tuto scroll.tuto', tutoPlace);
+    $('#board-viewport').on('scroll.tuto', tutoPlace);
+    tutoShow(0);
+}
+
+function endTutorial() {
+    Tuto.active = false;
+    $('#tutorial').hide();
+    $(window).off('.tuto');
+    $('#board-viewport').off('.tuto');
+}
+
+function tutoGo(delta) {
+    const n = Tuto.i + delta;
+    if (n < 0) return;
+    if (n >= Tuto.steps.length) { endTutorial(); return; }
+    tutoShow(n);
+}
+
+function tutoShow(i) {
+    Tuto.i = i;
+    const step = Tuto.steps[i];
+    const last = i === Tuto.steps.length - 1;
+    $('#tuto-title').text(step.title);
+    $('#tuto-text').html(step.html);
+    $('#tuto-progress').text((i + 1) + ' / ' + Tuto.steps.length);
+    $('#tuto-prev').toggle(i > 0);
+    $('#tuto-next').html(last
+        ? '<i class="fas fa-flag-checkered"></i> C\'est parti !'
+        : 'Suivant <i class="fas fa-arrow-right"></i>');
+    // Bring the target into view first; the spotlight is placed afterwards so it
+    // lands on the element's final position.
+    const el = step.sel ? document.querySelector(step.sel) : null;
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', inline: 'nearest' });
+    requestAnimationFrame(tutoPlace);
+}
+
+// Place the spotlight over the current target and the bubble beside it.
+function tutoPlace() {
+    if (!Tuto.active) return;
+    const step = Tuto.steps[Tuto.i];
+    const $spot = $('#tuto-spot'), $bub = $('#tuto-bubble');
+    const el = step && step.sel ? document.querySelector(step.sel) : null;
+    const vw = window.innerWidth, vh = window.innerHeight;
+
+    if (!el) {   // no target : dim everything, centre the bubble
+        $spot.hide();
+        $('#tutorial').addClass('tuto-dim');
+        $bub.css({ top: '', left: '' });
+        return;
+    }
+    $('#tutorial').removeClass('tuto-dim');
+    const r = el.getBoundingClientRect();
+    const pad = 6;
+    $spot.show().css({
+        top: (r.top - pad) + 'px', left: (r.left - pad) + 'px',
+        width: (r.width + pad * 2) + 'px', height: (r.height + pad * 2) + 'px'
+    });
+
+    const bw = $bub.outerWidth(), bh = $bub.outerHeight(), gap = 14;
+    let top, left;
+    if (r.bottom + gap + bh <= vh) {                       // below
+        top = r.bottom + gap;
+        left = r.left + r.width / 2 - bw / 2;
+    } else if (r.top - gap - bh >= 0) {                    // above
+        top = r.top - gap - bh;
+        left = r.left + r.width / 2 - bw / 2;
+    } else if (r.right + gap + bw <= vw) {                 // right
+        left = r.right + gap;
+        top = r.top + r.height / 2 - bh / 2;
+    } else if (r.left - gap - bw >= 0) {                   // left
+        left = r.left - gap - bw;
+        top = r.top + r.height / 2 - bh / 2;
+    } else {                                               // nothing fits : bottom
+        left = vw / 2 - bw / 2;
+        top = vh - bh - 10;
+    }
+    $bub.css({
+        top: Math.min(Math.max(8, top), Math.max(8, vh - bh - 8)) + 'px',
+        left: Math.min(Math.max(8, left), Math.max(8, vw - bw - 8)) + 'px'
+    });
+}
+
+// Auto-start once, on the first real render of a live game.
+function maybeStartTutorial() {
+    if (Game._tutoChecked || Tuto.active) return;
+    if (!Game.state || Game.state.status !== 'PLAYING') return;
+    if ($('#waiting-overlay').is(':visible')) return;   // still waiting for players
+    Game._tutoChecked = true;
+    if (!tutorialEnabled()) return;
+    setTimeout(() => { if (!Tuto.active) startTutorial(); }, 800);
 }

@@ -68,6 +68,7 @@
             <span class="music" id="audio-control" title="Musique"><span class="lbl">Musique </span><i class="fas fa-volume-xmark"></i></span>
             <span class="gh-link" id="rules-link" title="Règles du jeu"><i class="fas fa-book"></i><span class="gh-link-lbl"> Règles</span></span>
             <span class="gh-link" id="changelog-link" title="Nouveautés / changelog"><i class="fas fa-scroll"></i><span class="gh-link-lbl"> Changelog</span></span>
+            <span class="gh-link" id="tuto-link" title="Revoir le didacticiel"><i class="fas fa-dragon"></i><span class="gh-link-lbl"> Didacticiel</span></span>
         </div>
         <div class="gh-center">
             <span id="turn-info" class="turn-info"></span>
@@ -143,6 +144,30 @@
             <span class="td-hint">Cliquez une tuile pour voir sa description.</span>
         </div>
     </main>
+
+    <!-- Guided tour: a spotlight over the element being explained + the baby
+         dragon's speech bubble. The container itself swallows every click, so
+         the game stays inert while the tour is running. -->
+    <div id="tutorial" class="tuto" style="display:none;">
+        <div id="tuto-spot" class="tuto-spot"></div>
+        <div id="tuto-bubble" class="tuto-bubble">
+            <img class="tuto-dragon" src="static/assets/adventurers/baby-dragon-portrait.png" alt="Bébé dragon" />
+            <div class="tuto-body">
+                <div class="tuto-head">
+                    <span id="tuto-title" class="tuto-title"></span>
+                    <span id="tuto-progress" class="tuto-progress"></span>
+                </div>
+                <div id="tuto-text" class="tuto-text"></div>
+                <label class="tuto-optout"><input type="checkbox" id="tuto-optout" /> Ne plus afficher au début des parties</label>
+                <div class="tuto-actions">
+                    <button id="tuto-skip" class="tuto-btn tuto-skip">Passer</button>
+                    <span class="tuto-spacer"></span>
+                    <button id="tuto-prev" class="tuto-btn"><i class="fas fa-arrow-left"></i> Retour</button>
+                    <button id="tuto-next" class="tuto-btn primary">Suivant <i class="fas fa-arrow-right"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Journal log toasts (bottom of screen, both mobile and desktop) -->
     <div id="log-toast" class="log-toast"></div>
