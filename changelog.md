@@ -3,11 +3,11 @@
 All notable changes to Dungeon Escape are documented here.
 Versions use a calendar scheme: `vYYYY.MM.DD`.
 
-## v2026.08.10
+## v2026.08.09
 
 ### Added
-- **Guided tour ("didacticiel")**: a baby dragon walks a player through the whole
-  interface. Each step spotlights one element of the screen (everything else is
+- **Guided tour ("didacticiel")**: **Poppy**, the dungeon's baby dragon, walks a
+  player through the whole interface. Each step spotlights one element of the screen (everything else is
   dimmed) while the dragon explains it in a speech bubble — the dungeon and its
   "+" openings, the party rail, action points, the three action groups, the
   movement colour code, the event box, the doom counter, the shared resources,
@@ -28,6 +28,18 @@ Versions use a calendar scheme: `vYYYY.MM.DD`.
 - **Passive abilities are tappable**: they now open a modal with their full
   description, on phones as well as on desktop (hover tooltips are unreachable
   on touch screens).
+- **Illustrated bad events**: each misfortune card (Fire, Curse, Poison, Dragon,
+  Total darkness) and the Sudden death now has its own illustration, shown in the
+  central announcement toast and in the left rail. On phones the rail keeps the
+  compact emoji + name chip — tapping it opens the modal with the full picture
+  and the description.
+- **"×2" seal on doubled cards**: a doubled misfortune keeps the artwork of its
+  base type, stamped with a red-and-gold **×2** badge — on the illustration
+  (toast, rail, modal) and next to the emoji in the compact mobile rail. The
+  name drops its redundant " x2" suffix where the seal is shown, and the modal
+  spells out that the effects are applied twice.
+- **Illustrated rules, continued**: every bad-event chapter now shows its own
+  card illustration too (the Dragon *phase* keeps the original large artwork).
 
 ### Changed
 - **The "whose turn" badge moved into the header.** It was duplicated above the
@@ -95,7 +107,7 @@ Versions use a calendar scheme: `vYYYY.MM.DD`.
   The three bugs fixed above were all found by this harness rather than by
   reading the diff.
 
-## v2026.08.09
+## v2026.08.07
 
 ### Added
 - **Board targeting instead of modals**: actions that used to ask for coordinates
@@ -120,21 +132,10 @@ Versions use a calendar scheme: `vYYYY.MM.DD`.
 - **Slain Dragon animation**: a broken heart bursts over the tile when a Dragon
   is slain, mirroring the damage feedback on adventurers.
 - **Game duration** is shown on the end-of-game screen.
-- **Illustrated bad events**: each misfortune card (Fire, Curse, Poison, Dragon,
-  Total darkness) and the Sudden death now has its own illustration, shown in the
-  central announcement toast and in the left rail. On phones the rail keeps the
-  compact emoji + name chip — tapping it opens the modal with the full picture
-  and the description.
-- **"×2" seal on doubled cards**: a doubled misfortune keeps the artwork of its
-  base type, stamped with a red-and-gold **×2** badge — on the illustration
-  (toast, rail, modal) and next to the emoji in the compact mobile rail. The
-  name drops its redundant " x2" suffix where the seal is shown, and the modal
-  spells out that the effects are applied twice.
 - **Illustrated rules**: every adventurer chapter now shows the character's full
-  illustration next to their abilities, and every bad-event chapter shows its
-  card illustration (the Dragon *phase* keeps the original large artwork).
-  Illustrations float beside the text and are lazy-loaded, so the rules modal
-  stays light until you scroll to them.
+  illustration next to their abilities, and the Dragon bad-event chapter shows
+  the Dragon. Illustrations float beside the text and are lazy-loaded, so the
+  rules modal stays light until you scroll to them.
 
 ### Changed
 - **Hiding lasts the whole round**: the *hidden* status is now cleared at the

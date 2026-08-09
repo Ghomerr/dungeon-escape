@@ -1692,7 +1692,8 @@ function formatDuration(ms) {
 // ---------------------------------------------------------------------------
 // Guided tour ("didacticiel")
 //
-// A baby dragon walks a first-time player through the interface: each step
+// Poppy, the dungeon's baby dragon, walks a first-time player through the
+// interface: each step
 // spotlights one element of the screen (everything else is dimmed) and the
 // dragon explains it in a speech bubble. Steps whose target is absent from the
 // DOM are skipped, so the tour adapts to the current layout (compact rails,
@@ -1706,7 +1707,7 @@ const tutorialEnabled = () => localStorage.getItem(TUTO_KEY) !== 'off';
 const TUTO_STEPS = [
     {
         title: 'Bienvenue dans le Donjon !',
-        html: '<p>Salut ! Je suis le <b>bébé dragon</b> du Donjon, et je vais t\'expliquer comment on s\'en échappe.</p>' +
+        html: '<p>Salut ! Moi, c\'est <b>Poppy</b>, le petit dragon du Donjon, et je vais t\'expliquer comment on s\'en échappe.</p>' +
             '<p><b>Le but :</b> vous êtes une équipe d\'aventuriers enfermés dans un donjon qui se construit au fur et à mesure ' +
             'que vous l\'explorez. Il faut trouver la tuile <b>Sortie</b> 🚪 et y amener un maximum d\'aventuriers.</p>' +
             '<p><b>C\'est un jeu coopératif</b> : vous gagnez ou perdez ensemble.</p>'
