@@ -197,6 +197,7 @@ $(document).ready(() => {
     // Manual compact/detailed toggles for the two side rails (double-arrow
     // buttons). Defaults to detailed on wide screens, compact on phones.
     initUiModes();
+    watchUiBreakpoint();
     $('#party-toggle').click(() => toggleUiMode('party'));
     $('#actions-toggle').click(() => toggleUiMode('actions'));
 
@@ -828,13 +829,31 @@ function maybeShowEventToast(state) {
 
 // --- Rail display modes (compact icons ↔ detailed with names) --------------
 
+const WIDE_UI = () => window.innerWidth >= 900;
+// The preference is remembered per layout: collapsing a rail on a phone must not
+// leave the desktop stuck in compact mode. A roomy screen therefore always opens
+// with both rails fully expanded unless they were collapsed *while* roomy.
+function uiKey(which) { return 'de-' + which + '-view-' + (WIDE_UI() ? 'wide' : 'narrow'); }
+
 function initUiModes() {
-    const wide = window.innerWidth >= 900;
+    const wide = WIDE_UI();
     Game.ui = {
-        party: localStorage.getItem('de-party-view') || (wide ? 'expanded' : 'compact'),
-        actions: localStorage.getItem('de-actions-view') || (wide ? 'expanded' : 'compact')
+        party: localStorage.getItem(uiKey('party')) || (wide ? 'expanded' : 'compact'),
+        actions: localStorage.getItem(uiKey('actions')) || (wide ? 'expanded' : 'compact')
     };
     applyUiModes();
+}
+
+// Crossing the wide/narrow boundary (rotation, window resize, dev tools) swaps
+// to the preference stored for the new layout.
+function watchUiBreakpoint() {
+    let wasWide = WIDE_UI();
+    $(window).on('resize', () => {
+        if (WIDE_UI() === wasWide) return;
+        wasWide = WIDE_UI();
+        initUiModes();
+        if (Game.state) render(Game.state);
+    });
 }
 function applyUiModes() {
     const $m = $('.game-main');
@@ -846,7 +865,7 @@ function applyUiModes() {
 }
 function toggleUiMode(which) {
     Game.ui[which] = Game.ui[which] === 'expanded' ? 'compact' : 'expanded';
-    localStorage.setItem('de-' + which + '-view', Game.ui[which]);
+    localStorage.setItem(uiKey(which), Game.ui[which]);
     applyUiModes();
     if (Game.state) {
         if (which === 'party') { renderParty(Game.state); renderEvent(Game.state); }
@@ -888,6 +907,25 @@ function renderFireballs(state) {
     $('#fireball-res').css('display', '');
 }
 
+/**
+ * Centre of an adventurer's token, in #board coordinates.
+ *
+ * Walking the offsetParent chain (rather than getBoundingClientRect) keeps the
+ * result independent of the board's scroll position AND of the slide animation's
+ * transform. It also pins the feedback to the token itself, not to the middle of
+ * the tile — which matters as soon as two adventurers share a tile.
+ */
+function tokenCenter(cid) {
+    const el = document.querySelector('#board .char-token[data-cid="' + cid + '"]');
+    if (!el) return null;
+    let x = el.offsetLeft + el.offsetWidth / 2;
+    let y = el.offsetTop + el.offsetHeight / 2;
+    let p = el.offsetParent;                       // the tile, then the board
+    while (p && p.id !== 'board') { x += p.offsetLeft; y += p.offsetTop; p = p.offsetParent; }
+    if (!p) return null;
+    return { x, y, h: el.offsetHeight };
+}
+
 // Floating heal / damage feedback: when an adventurer's HP changes between two
 // states, a FontAwesome icon pops over their token ON THE BOARD (green heart
 // rising for a heal, red cracked heart shaking for damage) then fades out.
@@ -895,17 +933,17 @@ function spawnHpFx(state) {
     const prev = Game._prevHp;
     const cur = {};
     state.characters.forEach(c => { cur[c.id] = c.hp; });
-    if (prev && Game._boardMin) {
-        const { minR, minC } = Game._boardMin;
+    if (prev) {
         state.characters.forEach(c => {
             const before = prev[c.id];
             if (before === undefined || before === c.hp) return;
             if (c.escaped || c.dead) return;   // no token on the board
+            const pos = tokenCenter(c.id);
+            if (!pos) return;
             const healed = c.hp > before;
-            const x = (c.col - minC) * CELL + CELL / 2;
-            const y = (c.row - minR) * CELL + CELL / 2;
             const $fx = $('<span class="hp-fx on-board ' + (healed ? 'heal' : 'damage') + '"><i class="fas fa-' +
-                (healed ? 'heart-circle-plus' : 'heart-crack') + '"></i></span>').css({ left: x + 'px', top: y + 'px' });
+                (healed ? 'heart-circle-plus' : 'heart-crack') + '"></i></span>')
+                .css({ left: pos.x + 'px', top: pos.y + 'px' });
             $('#board').append($fx);
             setTimeout(() => $fx.remove(), 1200);
         });
@@ -1000,8 +1038,10 @@ function compactPartyCard(c, state) {
         : '';
     const tip = attrEscape(c.name + ' — Niv. ' + c.level + ' · ' + c.hp + '/' + c.maxHp + ' PV · ' + c.ownerId) +
         '\n' + abilitiesTip(c);
+    // Compact: the tight round frame reads much better with the face crop than
+    // with the full illustration (kept for the detailed card).
     return '<div class="party-card compact' + (isActive ? ' active' : '') + '" data-cid="' + c.id + '" title="' + tip + '" style="border-color:' + c.color + '">' + arrow +
-        '<div class="pc-portrait" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '">' + statusBadge + '</div>' +
+        '<div class="pc-portrait" style="background-image:url(' + portraitCardUrl(c.id) + ');border-color:' + c.color + '">' + statusBadge + '</div>' +
         '<div class="pc-hp"><span class="pc-hp-num">' + c.hp + '</span>' + hpBar + '</div>' +
         apRow + '</div>';
 }
@@ -1033,6 +1073,8 @@ function detailedPartyCard(c, state) {
 }
 
 // Character details + abilities, shown in a modal when a party card is tapped.
+// The modal is the place with room for the full illustration and a proper
+// health bar (the rails only have space for a crop and a number).
 function openCharDialog(c) {
     let statusTxt = '';
     if (c.escaped) statusTxt = '<span class="cd-status st-escaped">Échappé</span>';
@@ -1044,12 +1086,15 @@ function openCharDialog(c) {
         '<li><b>' + escapeHtml(a.name) + '</b> ' + (a.passive ? '(Passif)' : '(' + a.cost + ' PA)') +
         ' — ' + escapeHtml(a.description) + '</li>').join('');
 
+    const hpPct = c.maxHp ? (100 * c.hp / c.maxHp) : 0;
     $('#char-detail').html(
         '<div class="cd-head">' +
-        '<div class="cd-portrait" style="background-image:url(' + portraitCardUrl(c.id) + ');border-color:' + c.color + '"></div>' +
+        '<div class="cd-portrait" style="background-image:url(' + portraitUrl(c.id) + ');border-color:' + c.color + '"></div>' +
         '<div class="cd-id"><div class="cd-name">' + escapeHtml(c.name) + '</div>' +
-        '<div class="cd-meta">Niv. ' + c.level + ' · ' + c.hp + '/' + c.maxHp + ' PV · ' +
-        '<i class="fas fa-user"></i> ' + escapeHtml(c.ownerId) + '</div>' + statusTxt + '</div></div>' +
+        '<div class="cd-meta">Niv. ' + c.level + ' · <i class="fas fa-user"></i> ' + escapeHtml(c.ownerId) + '</div>' +
+        '<div class="cd-hp"><div class="hp-bar"><div class="hp-fill" style="width:' + hpPct + '%"></div></div>' +
+        '<div class="cd-hp-num">' + c.hp + ' / ' + c.maxHp + ' PV</div></div>' +
+        statusTxt + '</div></div>' +
         '<ul class="cd-abilities">' + abilities + '</ul>');
     $('#char-dialog').dialog('option', 'title', c.name);
     $('#char-dialog').dialog('open');
@@ -1296,7 +1341,7 @@ function renderBoard(state) {
                 if (state.ap <= 0) activeCls += ' aura-empty';
             }
             const $tok = $('<span class="token char-token' + koCls + activeCls + (asTarget ? ' tok-target' : '') +
-                '" style="background-image:url(' + portraitCardUrl(c.id) + ');border-color:' + c.color +
+                '" data-cid="' + c.id + '" style="background-image:url(' + portraitCardUrl(c.id) + ');border-color:' + c.color +
                 '" title="' + c.name + ' (' + c.hp + '/' + c.maxHp + ')' + (c.hidden ? ' — caché' : '') + '"></span>');
             if (asTarget) $tok.on('click', (e) => { e.stopPropagation(); resolveTarget(asTarget.onPick); });
             $tile.append($tok);
@@ -1336,6 +1381,7 @@ function renderBoard(state) {
     });
 
     Game._tokenPos = curPos;
+    renderTokenActions($board, state, ac);
 
     // When a new adventurer becomes active (turn start), scroll the board so
     // that adventurer is centred in the viewport.
@@ -1346,6 +1392,38 @@ function renderBoard(state) {
             if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
         }, 60);
     }
+}
+
+/**
+ * Out of action points : pin an "Effort" and an "End turn" button right under
+ * the active token, so the turn can be wrapped up without hunting for the rail.
+ * They vanish as soon as one is used — and an Effort brings them back once its
+ * bonus point is spent (Effort being usable only once per turn, only "End turn"
+ * comes back then).
+ */
+function renderTokenActions($board, state, ac) {
+    if (!isMyTurn() || state.pending || Game.targeting) return;
+    if (!ac || ac.escaped || ac.dead) return;
+    if (state.ap > 0 || state.freeMoves > 0) return;
+    const pos = tokenCenter(ac.id);
+    if (!pos) return;
+
+    const $wrap = $('<div class="tok-actions"></div>')
+        .css({ left: pos.x + 'px', top: (pos.y + pos.h / 2 + 4) + 'px' });
+    const add = (cls, icon, title, action) => {
+        $wrap.append($('<button class="round-act tok-act ' + cls + '" title="' + title + '"><span class="act-ico">' +
+            icon + '</span></button>').on('click', (e) => {
+                e.stopPropagation();
+                $wrap.remove();            // instant feedback, before the state round-trip
+                sendAction(action, {});
+            }));
+    };
+    if (ac.conscious && !state.effortUsed) {
+        add('tok-act-effort', faIco('dumbbell'), 'Effort : +1 PA (jet de talent en fin de tour)', 'effort');
+    }
+    add('primary', faIco('forward-step'),
+        ac.conscious ? 'Finir le tour' : 'Passer le tour (inconscient)', 'end-turn');
+    $board.append($wrap);
 }
 
 function miniTilePreview(cand, exits) {
@@ -1416,7 +1494,6 @@ function renderActions(state) {
     const ac = activeChar();
     const ap = state.ap, freeMoves = state.freeMoves;
     const blockedByPending = !!state.pending;
-    const expanded = Game.ui && Game.ui.actions === 'expanded';
 
     // During a Run / Animal Celerity, only movement (and cancel) is allowed.
     const running = freeMoves > 0;
@@ -1430,21 +1507,26 @@ function renderActions(state) {
     const effortAssistFor = (def) =>
         my && ac && ac.conscious && !blockedByPending && !running &&
         !state.effortUsed && def.cost > 0 && ap < def.cost && (ap + 1) >= def.cost;
-    // Yellow lightning pips showing an AP cost inside a round action button.
-    const costPips = (n) => {
-        if (!n) return '';
-        let s = '<span class="ap-pips">';
+    // Yellow lightning pips representing an AP cost.
+    const pips = (n) => {
+        let s = '';
         for (let i = 0; i < n; i++) s += '<i class="fas fa-bolt"></i>';
-        return s + '</span>';
+        return s;
     };
+    // Compact: pips tucked under the icon. Expanded: pips + "PA" after the label.
+    const costOverlay = (n) => n ? '<span class="ap-pips">' + pips(n) + '</span>' : '';
+    const costTail = (n) => n ? '<span class="ap-cost">' + pips(n) + ' PA</span>' : '';
+
+    // One markup for both layouts: a round icon button, which in expanded mode
+    // grows a label plate welded to its right (rounded on the far side).
+    const pillHtml = (icon, label, cost, extraTail) =>
+        '<span class="act-ico">' + icon + '</span>' + costOverlay(cost) +
+        '<span class="act-ext"><span class="act-lbl">' + escapeHtml(label) + '</span>' +
+        (extraTail !== undefined ? extraTail : costTail(cost)) + '</span>';
+
     const buildBtn = (def, isAbility) => {
         const icon = isAbility ? (ABILITY_ICON[def.abilityId] || '✨') : (ACTION_ICON[def.action] || '');
-        // Expanded (PC) : labelled row button. Compact (mobile) : icon-only round
-        // button with AP-cost pips, the label/description living in the tooltip.
-        const $b = expanded
-            ? $('<button class="action-btn"><span class="act-ico">' + icon + '</span><span class="act-lbl">' + escapeHtml(def.label) +
-                '</span><span class="ap-cost">' + (def.cost ? def.cost + ' PA' : '') + '</span></button>')
-            : $('<button class="round-act"><span class="act-ico">' + icon + '</span>' + costPips(def.cost) + '</button>');
+        const $b = $('<button class="round-act act-pill">' + pillHtml(icon, def.label, def.cost) + '</button>');
         $b.attr('title', def.label + (def.cost ? ' (' + def.cost + ' PA)' : '') + (def.tip ? ' — ' + def.tip : ''));
         const normal = enabledFor(def);
         const assist = !normal && effortAssistFor(def);
@@ -1455,13 +1537,23 @@ function renderActions(state) {
     };
     // Cancel button shown in place of the Run / Celerity button until a move starts.
     const buildCancelBtn = (label) => {
-        const $b = expanded
-            ? $('<button class="action-btn cancel-run-btn"><span class="act-ico">' + faIco('rotate-left') + '</span><span class="act-lbl">' + escapeHtml(label) + '</span><span class="ap-cost"></span></button>')
-            : $('<button class="round-act cancel-run-btn"><span class="act-ico">' + faIco('rotate-left') + '</span></button>');
+        const $b = $('<button class="round-act act-pill cancel-run-btn">' +
+            pillHtml(faIco('rotate-left'), label, 0, '') + '</button>');
         $b.attr('title', label);
         const enabled = my && !blockedByPending && !!state.cancelRunKind;
         $b.prop('disabled', !enabled);
         if (enabled) $b.click(() => sendAction('cancel-run', {}));
+        return $b;
+    };
+    // Passive abilities use the very same pill, with a dashed outline. They are
+    // not actionable, so a tap/click just explains what they do (tooltips are
+    // unreachable on touch screens).
+    const buildPassiveBtn = (a) => {
+        const $b = $('<button class="round-act act-pill passive-act">' +
+            pillHtml(ABILITY_ICON[a.id] || '✨', a.name, 0, '<span class="ap-cost passive-tag">Passif</span>') + '</button>');
+        $b.attr('title', a.name + ' (passif) — ' + a.description);
+        $b.click(() => Dialog.openSimpleDialog($('#simple-dialog'),
+            a.name + ' (passif)', escapeHtml(a.description), 360));
         return $b;
     };
 
@@ -1483,14 +1575,7 @@ function renderActions(state) {
             if (a.id === 'fireball' && ac.uses && ac.uses.fireball >= 3) $b.prop('disabled', true);
             $abil.append($b);
         });
-        // Passive abilities: labelled chip (PC) or dimmed round picto (mobile).
-        ac.abilities.filter(a => a.passive).forEach(a => {
-            if (expanded) {
-                $abil.append('<div class="passive-chip" title="' + attrEscape(a.description) + '">' + (ABILITY_ICON[a.id] || '✨') + ' ' + escapeHtml(a.name) + '</div>');
-            } else {
-                $abil.append('<span class="round-act passive-act" title="' + attrEscape(a.name + ' (passif) — ' + a.description) + '"><span class="act-ico">' + (ABILITY_ICON[a.id] || '✨') + '</span></span>');
-            }
-        });
+        ac.abilities.filter(a => a.passive).forEach(a => $abil.append(buildPassiveBtn(a)));
     }
 
     $('#effort-btn').prop('disabled', !my || !ac || !ac.conscious || state.effortUsed || blockedByPending);

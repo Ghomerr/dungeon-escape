@@ -226,13 +226,19 @@ body.in-game { height: 100dvh; overflow: hidden; }
 .event-content { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
 
 /* Character details modal */
-.char-detail .cd-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+/* The modal is where the full illustration fits, next to a real health bar. */
+.char-detail .cd-head { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
 .char-detail .cd-portrait {
-    width: 66px; height: 66px; border-radius: 50%; flex: 0 0 auto;
-    background-size: cover; background-position: center; border: 3px solid #0006; box-shadow: 0 2px 6px #0008;
+    width: 132px; max-width: 42%; aspect-ratio: 1 / 1; flex: 0 0 auto;
+    border-radius: 10px;
+    background-size: cover; background-position: center; border: 3px solid #0006; box-shadow: 0 2px 8px #000a;
 }
+.char-detail .cd-id { flex: 1; min-width: 0; }
 .char-detail .cd-name { font-weight: bold; color: var(--gold-light); font-size: 1.1rem; }
 .char-detail .cd-meta { color: var(--muted); font-size: .85rem; margin-top: 2px; }
+.char-detail .cd-hp { margin-top: 8px; }
+.char-detail .cd-hp .hp-bar { height: 10px; }
+.char-detail .cd-hp-num { color: var(--gold-light); font-size: .82rem; font-weight: bold; margin-top: 3px; }
 .char-detail .cd-status { display: inline-block; margin-top: 5px; font-size: .72rem; font-weight: bold; padding: 1px 8px; border-radius: 10px; }
 .char-detail .cd-status.st-escaped { background: #2c5e2c; color: #cfe; }
 .char-detail .cd-status.st-dead { background: #4a1010; color: #fbb; }
@@ -463,6 +469,24 @@ body.in-game { height: 100dvh; overflow: hidden; }
    the mask badge shown on the character card. */
 .char-token.tok-hidden { opacity: .4; filter: grayscale(.35); }
 
+/* ---- Out-of-AP shortcuts, pinned under the active token ---- */
+.tok-actions {
+    position: absolute; z-index: 26;
+    transform: translateX(-50%);
+    display: flex; gap: 5px;
+}
+.tok-actions .tok-act {
+    width: 34px; height: 34px;
+    box-shadow: 0 2px 8px #000b;
+    animation: tok-act-in .25s ease-out;
+}
+.tok-actions .tok-act .act-ico { font-size: .95rem; }
+.tok-actions .tok-act-effort { background: linear-gradient(to bottom, #6a3a1c, #4a2814); border-color: #a05a2c; color: #ffe; }
+@keyframes tok-act-in {
+    0% { opacity: 0; transform: translateY(-6px) scale(.8); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 /* tile kinds (the corridor floor tint) */
 .tile.kind-start { background: #1d4d1d; }
 .tile.kind-exit { background: #1d5a4d; }
@@ -563,7 +587,43 @@ body.in-game { height: 100dvh; overflow: hidden; }
     background: #1c1208cc; border-radius: 6px; padding: 1px 3px;
 }
 .round-act .ap-pips .fa-bolt { font-size: .5rem; color: #ffd23f; filter: drop-shadow(0 0 1px #a76b00); }
-.round-act.passive-act { opacity: .6; border-style: dashed; cursor: default; background: var(--panel2); }
+.round-act.passive-act { opacity: .75; border-style: dashed; background: var(--panel2); }
+
+/* ---- Action / ability pill --------------------------------------------------
+   One markup for both layouts: a round icon button which, in expanded mode,
+   grows a label plate welded to its right (rounded on the far side). The label
+   plate and the "⚡ PA" tail only exist when expanded; the pips tucked under the
+   icon only show when compact. */
+.act-pill .act-ext { display: none; }
+
+.game-main.actions-expanded .actions-panel .act-pill {
+    width: 100%; height: auto; min-height: 46px;
+    padding: 0; gap: 0; border-radius: 999px;
+    justify-content: flex-start; text-align: left;
+}
+.game-main.actions-expanded .act-pill .act-ico {
+    flex: 0 0 auto; width: 44px; align-self: stretch;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 999px 0 0 999px;
+    background: #0000002e;
+    box-shadow: inset -1px 0 0 #00000038;
+}
+.game-main.actions-expanded .act-pill .act-ext {
+    display: flex; align-items: center; gap: 8px;
+    flex: 1; min-width: 0; padding: 6px 12px 6px 10px;
+}
+.game-main.actions-expanded .act-pill .act-lbl { display: block; flex: 1; min-width: 0; line-height: 1.2; }
+.game-main.actions-expanded .act-pill .ap-pips { display: none; }
+/* AP cost after the label: the lightning pips, then the "PA" unit. */
+.act-pill .ap-cost {
+    flex: 0 0 auto; color: var(--gold); font-size: .78rem; font-weight: bold;
+    display: inline-flex; align-items: center; gap: 2px; white-space: nowrap;
+}
+.act-pill .ap-cost .fa-bolt { color: #ffd23f; filter: drop-shadow(0 0 1px #a76b00); }
+.act-pill .ap-cost.passive-tag { color: var(--muted); font-weight: normal; font-style: italic; }
+/* A passive is the same pill, dashed all around (right side still rounded). */
+.game-main.actions-expanded .act-pill.passive-act .act-ico { background: #00000024; }
+.act-pill.cancel-run-btn .act-ico { background: #00000038; }
 .round-act.cancel-run-btn { background: linear-gradient(to bottom, #6a3a1c, #4a2814); border-color: #a05a2c; color: #ffe; }
 .round-act.cancel-run-btn:hover:not(:disabled) { background: linear-gradient(to bottom, #7a4522, #5a3018); }
 .round-act.needs-effort { border-style: dashed; border-color: var(--gold); }
@@ -667,9 +727,11 @@ body.in-game #game-emoji-bar.open {
     flex-direction: row; align-items: center; gap: 9px;
     border-left-width: 4px; padding: 7px 9px; text-align: left;
 }
+/* Round frame here too; the full illustration is zoomed slightly so its drawn
+   border is cropped out by the circle instead of showing as a ring. */
 .party-card.detailed .pc-portrait {
     width: 34%; max-width: none; height: auto; aspect-ratio: 1 / 1;
-    border-radius: 8px; margin: 0;
+    border-radius: 50%; margin: 0; background-size: 128%;
 }
 .party-card.detailed .active-arrow { top: 50%; left: -11px; }
 @keyframes arrowpulse2 { 0%, 100% { left: -11px; } 50% { left: -6px; } }
@@ -699,34 +761,24 @@ body.in-game #game-emoji-bar.open {
 .game-main.party-expanded .res b { color: var(--gold-light); }
 .game-main.party-expanded .event-box { justify-content: flex-start; }
 
-/* Actions rail — labelled row buttons (original style). */
+/* Actions rail — the pills stretch to the rail width when expanded. */
 .game-main.actions-expanded .action-rail { align-items: stretch; gap: 5px; }
-.action-btn { text-align: left; display: flex; align-items: center; gap: 8px; width: 100%; }
-.action-btn .act-ico { width: 20px; text-align: center; font-size: 1.05rem; flex: 0 0 auto; }
-.action-btn .act-lbl { flex: 1; }
-.action-btn .ap-cost { color: var(--gold); font-size: .78rem; font-weight: bold; flex: 0 0 auto; }
-.action-btn.needs-effort { border-style: dashed; border-color: var(--gold); opacity: .92; }
-.action-btn.needs-effort .ap-cost::after { content: ' 💪'; }
-.action-btn.cancel-run-btn { background: linear-gradient(to bottom, #6a3a1c, #4a2814); border-color: #a05a2c; color: #ffe; }
-.action-btn.cancel-run-btn:hover:not(:disabled) { background: linear-gradient(to bottom, #7a4522, #5a3018); }
-.passive-chip {
-    font-size: .8rem; color: var(--muted); background: var(--panel2);
-    border: 1px dashed var(--border); border-radius: 14px; padding: 3px 10px; margin-top: 4px;
-}
 
 /* In expanded mode, the static round buttons (effort/endturn/journal/emoji) and
    the active banner become full-width labelled rows. Journal/emoji live in the
    left (party) rail, so they follow party-expanded; effort/endturn follow
    actions-expanded. */
-.game-main.actions-expanded .actions-panel .round-act,
-.game-main.party-expanded .party-panel .round-act {
+/* `:not(.act-pill)` keeps the action / ability pills out of this: they have
+   their own expanded look (round icon + welded label plate), defined above. */
+.game-main.actions-expanded .actions-panel .round-act:not(.act-pill),
+.game-main.party-expanded .party-panel .round-act:not(.act-pill) {
     width: 100%; height: auto; border-radius: 6px; justify-content: flex-start;
     gap: 8px; padding: 8px 12px;
 }
-.game-main.actions-expanded .actions-panel .round-act .act-lbl,
-.game-main.party-expanded .party-panel .round-act .act-lbl { display: inline; flex: 1; text-align: left; }
-.game-main.actions-expanded .actions-panel .round-act .ap-pips,
-.game-main.party-expanded .party-panel .round-act .ap-pips { display: none; }
+.game-main.actions-expanded .actions-panel .round-act:not(.act-pill) .act-lbl,
+.game-main.party-expanded .party-panel .round-act:not(.act-pill) .act-lbl { display: inline; flex: 1; text-align: left; }
+.game-main.actions-expanded .actions-panel .round-act:not(.act-pill) .ap-pips,
+.game-main.party-expanded .party-panel .round-act:not(.act-pill) .ap-pips { display: none; }
 .game-main.actions-expanded .turn-controls { flex-direction: row; gap: 6px; margin: 12px 0; }
 .game-main.actions-expanded .turn-controls .round-act { flex: 1; justify-content: center; }
 .game-main.actions-expanded .turn-controls .round-act .act-lbl { flex: 0 1 auto; text-align: center; }
@@ -832,7 +884,10 @@ body.in-game #game-emoji-bar.open {
     /* The rails must no longer scroll internally, otherwise their content is
        trapped in a box smaller than the (now scrollable) page. */
     .party-panel, .actions-panel { overflow: visible; min-height: 0; }
-    .game-main { min-height: 0; align-items: start; }
+    /* Grid items stay stretched (the default): the row is as tall as the board,
+       so both rails run all the way down to the bottom of the screen instead of
+       stopping right under their last button. */
+    .game-main { min-height: 0; }
     /* The board keeps exactly one screenful; the rails then extend the page
        downward only by what they actually need. */
     .board-panel { height: calc(100dvh - var(--header-h) - 16px); min-height: 260px; }

@@ -3,6 +3,41 @@
 All notable changes to Dungeon Escape are documented here.
 Versions use a calendar scheme: `vYYYY.MM.DD`.
 
+## v2026.08.10
+
+### Added
+- **Out-of-AP shortcuts on the board**: when the active adventurer runs out of
+  action points, an **Effort** and an **End turn** button appear right under
+  their token (same round buttons as the compact rail). They disappear once used
+  — and after an Effort, the End turn button comes back as soon as the bonus
+  point is spent.
+- **Passive abilities are tappable**: they now open a modal with their full
+  description, on phones as well as on desktop (hover tooltips are unreachable
+  on touch screens).
+
+### Changed
+- **Roomy screens open with both rails expanded again.** The compact/detailed
+  choice is now remembered *per layout*, so collapsing a rail on a phone no
+  longer leaves the desktop stuck in compact mode; crossing the boundary
+  (rotation, window resize) switches to that layout's own preference.
+- **Action & ability buttons share one design**: the round icon button is now
+  used everywhere, extended on desktop by a label plate welded to its right
+  (rounded on the far side). The lightning pips move from under the icon to
+  after the label, followed by "PA". Passive abilities use the very same pill
+  with a dashed outline, so they line up with the active ones.
+- **Round adventurer portraits** in the left rail, in both compact and detailed
+  cards. The compact card shows the face crop (much more readable in a small
+  circle); the full illustration stays for the detailed card.
+- **Character modal**: shows the full illustration and a real health bar (with
+  the "3 / 3 PV" count under it) instead of a small portrait and a text count.
+
+### Fixed
+- **Heal / damage animations are pinned to the token**, not to the middle of the
+  tile: with two adventurers standing on the same tile, the feedback now pops
+  over the right one.
+- **Mobile: the side rails reach the bottom of the screen** instead of stopping
+  under their last button.
+
 ## v2026.08.09
 
 ### Added
