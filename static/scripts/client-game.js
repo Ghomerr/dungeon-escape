@@ -558,14 +558,35 @@ function tileFullLabel(tile) {
     return txt + '\n' + desc;
 }
 
-// Show the clicked tile's description as a floating panel over the board that
-// fades out on its own (the side rails no longer host it).
-function showTileDesc(tile) {
+// Show the clicked tile's description as a floating panel that fades out on its
+// own. It is pinned right next to the tile that was clicked (a panel parked in a
+// corner of the screen makes you look away from what you just tapped); it flips
+// above / beside the tile and is clamped to the viewport when there is no room.
+function showTileDesc(tile, el) {
     const parts = tileFullLabel(tile).split('\n');
     const $d = $('#tile-desc').removeClass('tile-desc-empty').html(
         '<div class="td-title">' + escapeHtml(parts[0]) + '</div>' +
         '<div class="td-body">' + escapeHtml(parts[1] || '') + '</div>');
     $d.stop(true, true).css('display', 'block').css('opacity', 1);
+
+    if (el) {
+        const r = el.getBoundingClientRect();
+        // Measure from a neutral spot: the panel is shrink-to-fit, so its width
+        // would otherwise depend on the position it still had.
+        $d.css({ top: '0px', left: '0px', bottom: 'auto', right: 'auto' });
+        const w = $d.outerWidth(), h = $d.outerHeight(), gap = 8;
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const clamp = (v, min, max) => Math.min(Math.max(v, min), Math.max(min, max));
+        let top;
+        if (r.bottom + gap + h <= vh) top = r.bottom + gap;          // below the tile
+        else if (r.top - gap - h >= 0) top = r.top - gap - h;        // above it
+        else top = clamp(r.top, 8, vh - h - 8);                      // beside it
+        $d.css({
+            top: clamp(top, 8, vh - h - 8) + 'px',
+            left: clamp(r.left + r.width / 2 - w / 2, 8, vw - w - 8) + 'px',
+            bottom: 'auto', right: 'auto'
+        });
+    }
     clearTimeout(Game._tileDescTimer);
     Game._tileDescTimer = setTimeout(() => $d.fadeOut(400), 5000);
 }
@@ -637,8 +658,8 @@ function moveWithConfirm(tile, ac, doIt) {
         'Se déplacer quand même', doIt, 'Annuler', null);
 }
 
-function onTileClick(tile) {
-    showTileDesc(tile);
+function onTileClick(tile, el) {
+    showTileDesc(tile, el);
     // While aiming an action, only the highlighted cells / tokens are actionable.
     if (Game.targeting) return;
     if (!isMyTurn()) return;
@@ -791,7 +812,8 @@ function playFx(fx) {
     switch (fx.kind) {
         case 'hide':
             showBigToast(fx.success ? {
-                color: '#2f2f5e', iconHtml: '<span class="toast-icon">🫥</span>',
+                // 🙈 rather than 🫥 : the latter is a blank box on Windows 10.
+                color: '#2f2f5e', iconHtml: '<span class="toast-icon">🙈</span>',
                 label: escapeHtml(fx.name) + ' se cache !',
                 sub: fx.auto ? 'Réussite automatique (3e essai)' : 'Jet de talent réussi (dé ' + fx.roll + ')',
                 ms: 2600
@@ -1372,7 +1394,7 @@ function renderBoard(state) {
             animateIfMoved($tok, $tile, 'c' + c.id, c.row, c.col, prevPos, curPos);
         });
 
-        $tile.click(() => onTileClick(t));
+        $tile.click((e) => onTileClick(t, e.currentTarget));
         $board.append($tile);
     });
 

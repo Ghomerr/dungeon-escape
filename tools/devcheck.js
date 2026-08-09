@@ -333,6 +333,40 @@ async function run() {
         await shoot(cdp, '20-character-modal');
         await cdp.eval("$('#char-dialog').dialog('close'), true");
 
+        // Tile description: must land next to the tile that was clicked.
+        await cdp.eval("$('#board .tile').not('.ghost-cell').first().click(), true");
+        await sleep(400);
+        await shoot(cdp, '21-tile-desc');
+        const desc = await cdp.eval(`
+            (() => {
+                const p = document.querySelector('#tile-desc');
+                const t = document.querySelector('#board .tile:not(.ghost-cell)');
+                if (!p || !t || p.style.display === 'none') return null;
+                const a = p.getBoundingClientRect(), b = t.getBoundingClientRect();
+                return { dx: Math.round(Math.abs((a.left + a.width/2) - (b.left + b.width/2))),
+                         dy: Math.round(Math.abs((a.top + a.height/2) - (b.top + b.height/2))) };
+            })()`);
+        if (desc) {
+            log('  · tile popup offset from the tile: dx=' + desc.dx + ' dy=' + desc.dy);
+            if (desc.dx > 300 || desc.dy > 300) {
+                problems.push({ kind: 'layout', text: 'the tile description is far from the clicked tile (dx=' + desc.dx + ', dy=' + desc.dy + ')' });
+            }
+        } else {
+            problems.push({ kind: 'layout', text: 'clicking a tile showed no description panel' });
+        }
+
+        // Trigger a real "Se cacher" (2 AP, the active adventurer starts with 2):
+        // exercises the fx queue and shows whether its emoji renders on this OS.
+        await cdp.eval(`
+            (() => {
+                const b = [...document.querySelectorAll('#dungeon-actions button')]
+                    .find(el => /cacher/i.test(el.getAttribute('title') || ''));
+                if (b && !b.disabled) b.click();
+                return !!b;
+            })()`);
+        await sleep(900);
+        await shoot(cdp, '22-hide-toast');
+
         // Extra element shots requested on the command line (--shot name=selector).
         for (let i = 0; i < args.length; i++) {
             if (args[i] !== '--shot') continue;

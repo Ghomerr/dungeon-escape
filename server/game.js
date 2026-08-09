@@ -220,7 +220,7 @@ function startRound(room) {
     const wasHidden = g.characters.filter(c => c.hidden && !c.escaped && !c.dead);
     if (wasHidden.length) {
         for (const c of wasHidden) c.hidden = false;
-        pushLog(room, '👁️ ' + wasHidden.map(c => c.name).join(', ') +
+        pushLog(room, '👀 ' + wasHidden.map(c => c.name).join(', ') +
             (wasHidden.length > 1 ? ' ne sont plus cachés.' : ' n\'est plus caché.'));
     }
 
@@ -799,7 +799,7 @@ function doHide(room, char, payload) {
     const success = auto || roll.success;
     if (success) {
         char.hidden = true;
-        pushLog(room, '🫥 ' + char.name + ' se cache' + (auto ? ' (réussite automatique).' : ' (dé ' + roll.value + ').'));
+        pushLog(room, '🙈 ' + char.name + ' se cache' + (auto ? ' (réussite automatique).' : ' (dé ' + roll.value + ').'));
     } else {
         pushLog(room, '👀 ' + char.name + ' échoue à se cacher (dé ' + roll.value + ').');
     }

@@ -47,6 +47,12 @@ Versions use a calendar scheme: `vYYYY.MM.DD`.
   the "3 / 3 PV" count under it) instead of a small portrait and a text count.
 
 ### Fixed
+- **The hiding emoji is readable again**: `🫥` had crept back into the hide toast
+  and journal lines, where Windows 10 draws it as a blank box. Back to `🙈`, as
+  already decided in v2026.07.11.
+- **The tile description pops next to the tile you clicked**, instead of being
+  parked in the bottom-left corner of the screen — it flips above or beside the
+  tile and is clamped to the viewport when there is no room below.
 - **The guided tour now actually opens.** It waited for a board render that never
   came: no `game-state` is broadcast between "everyone is ready" and the first
   action, so the tour is started when the waiting overlay clears.
