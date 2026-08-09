@@ -144,6 +144,8 @@ Coût : 2 points d'actions + **jet de talent**. Un joueur peut utiliser 1 kit de
 Coût : 2 points d'action + **jet de talent**. Si le jet réussi, l'aventurier ne pourra pas être ciblé par les dragons pendant ce tour. Si l'action est utilisée trois fois de suite, elle réussit automatiquement. 
 
 # 2. Phase Dragons
+![Dragon](static/assets/adventurers/dragon.png)
+
 Quand un dragon se trouve dans le **Donjon**, il va se rapprocher d'une tuile de l'aventurier le plus proche. Les dragons ne peuvent pas traverser les murs du **Donjon**, mais ils ne sont pas affectés par les pièges de celui-ci, et peuvent traverser n'importe quelle tuile sans pénalité.
 
 S'il n'y a aucun aventurier dans le **Donjon** à 7 tuiles ou moins d'un Dragon, celui-ci disparaît du **Donjon** (mais il pourra revenir plus tard).
@@ -154,14 +156,20 @@ Si un Dragon occupe la même tuile qu'un aventurier, ce dernier perd immédiatem
 Piocher une carte "**Evenement fâcheux**" de la pioche et appliquer ses effets négatifs.
 
 ## Malédiction
+![Événement Malédiction](static/assets/bad-events/curse.png)
+
 Le **Donjon** exerce sa malédiction sur l'ensemble des aventuriers conscients. Chaque joueur effectue un **jet de talent**. En cas d'échec, l'aventurier perd 1 point de vie.
 
 ## Obscurité totale
+![Événement Obscurité totale](static/assets/bad-events/gloom.png)
+
 Toutes les tuiles **Pénombre** découvertes dans le **Donjon** deviennent des tuiles **Obscurité totale**. Les **aventuriers** qui étaient sur des tuiles **Pénombre** perdent alors 1 point de vie, car surpris, ils trébuchent et se blessent légèrement.
 
 Rappel : on ne peut pas entrer sur une tuile "**Obscurité totale**" sans utiliser l'action "**Marcher dans l'Obscurité**" (pour 2 points d'actions).
 
 ## Poison
+![Événement Poison](static/assets/bad-events/poison.png)
+
 Les **aventuriers** présents sur des tuiles **Empoisonnable** perdent immédiatement 2 points de vie. La tuile du **Donjon** devient **Empoisonnée** jusqu'à la prochaine phase d'évenement fâcheux.
 
 Les **aventuriers** qui se déplaceraient dans une tuile **Empoisonnée** pendant leur tour subissent le même effet (perte de 2 points de vie).
@@ -169,6 +177,8 @@ Les **aventuriers** qui se déplaceraient dans une tuile **Empoisonnée** pendan
 Tant que l'événement fâcheux est actif, si des tuiles **Empoisonnable** apparaissent, elles deviennent automatiquement **Empoisonnée** et l'effet s'applique aussi.
 
 ## Incendie
+![Événement Incendie](static/assets/bad-events/fire.png)
+
 Un jet de dé est réalisé afin d'identifier les tuiles **Inflammable** du **Donjon** qui vont subir cet effet. Tous les tuiles **Inflammable** qui ont la valeur du résultat du dé deviennent des tuiles **Incendie**.
 
 Chaque tuile **Inflammable** a une chance sur trois d'être **Incendiée**. Les valeurs de dés possibles sont visibles sur la tuile.
@@ -178,7 +188,7 @@ Si des **aventuriers** se trouvent sur ces tuiles, ils perdent immédiatement 3 
 Rappel : les **aventuriers** ne peuvent pas se déplacer à travers un incendie. Ils peuvent l'éteindre avec l'action "**Éteindre un incendie**" (pour 2 points d'actions).
 
 ## Dragon
-![Dragon](static/assets/adventurers/dragon.png)
+![Événement Dragon](static/assets/bad-events/dragon.png)
 
 Tous les **Dragons** déjà présents dans le **Donjon** se déplacent d'une tuile vers l'aventurier le plus proche.
 
@@ -192,6 +202,8 @@ Dans les niveaux de diffcultés **Avancé** et **Expert**, il existe des **évé
 L'exception est pour l'**événement fâcheux** "**Dragon x2**" : dans ce cas, les **Dragons** déjà présents vont se déplacer 2 fois. Puis, on fait apparaître jusqu'à 2 **Dragons** supplémentaires, en respectant les règles précédentes.
 
 ## Temps écoulé
+![Temps écoulé — Mort subite](static/assets/bad-events/sudden-death.png)
+
 Lorsque tous les **événements fâcheux** sont épuisés, le temps dans le **Donjon** est écoulé. A partir de cette instant, lors des prochaines phases d'**événements fâcheux**,  la malédiction s'abat sur tous les **aventuriers** encore présents dans le **Donjon**, conscients ou inconscients, sauf s'ils sont sur la tuile **Sortie**.
 
 Chaque joueur doit alors effectuer un **jet de talent**. En cas d'échec, l'aventurier est dévoré par les ténèbres et éliminé de la partie. 

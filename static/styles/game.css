@@ -60,8 +60,10 @@ body.in-game { height: 100dvh; overflow: hidden; }
     text-shadow: 0 2px 6px #000a;
 }
 .event-toast .toast-icon { font-size: 3.4rem; line-height: 1; }
+/* Bad-event illustrations are landscape: shown whole, never cropped. */
+.toast-illu { position: relative; display: block; }
 .event-toast .toast-img {
-    width: 190px; max-width: 60vw; aspect-ratio: 1 / 1; object-fit: cover;
+    width: min(460px, 74vw); height: auto; display: block;
     border-radius: 12px; border: 2px solid #ffffff88; box-shadow: 0 4px 16px #000a;
 }
 .event-toast .toast-label { font-size: 2.1rem; font-weight: bold; letter-spacing: 1px; }
@@ -213,7 +215,6 @@ body.in-game { height: 100dvh; overflow: hidden; }
 @keyframes ev-pulse { 0%, 100% { box-shadow: 0 0 6px color-mix(in srgb, var(--ev-color, #333) 45%, transparent); } 50% { box-shadow: 0 0 13px color-mix(in srgb, var(--ev-color, #333) 70%, transparent); } }
 .event-inline.clickable { cursor: pointer; }
 .event-inline .ev-emoji { font-size: 1.4rem; line-height: 1; }
-.event-inline .ev-mini-img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #0006; }
 .event-inline .ev-name { font-size: .62rem; color: #fff; text-align: center; font-weight: bold; line-height: 1.15; }
 
 /* Expanded (PC): full inline detail like the original event box. */
@@ -242,12 +243,38 @@ body.in-game { height: 100dvh; overflow: hidden; }
 .char-detail .cd-abilities b { color: var(--gold-light); }
 .event-icon { font-size: 1.2rem; }
 .event-head { font-size: 1rem; display: flex; align-items: center; gap: 8px; }
-/* Full illustration for image-based events (dragon) in the reminder box. */
+/* Bad-event illustration in the left rail (PC) and in the details modal:
+   full width of its container, natural aspect ratio (no crop). */
 .event-img {
-    width: 100%; max-height: 150px; object-fit: cover; border-radius: 6px;
+    width: 100%; height: auto; border-radius: 6px;
     border: 1px solid var(--border); display: block; margin-bottom: 6px;
 }
 .event-head:has(.event-img) { display: block; }
+.event-illu { position: relative; display: block; }
+
+/* ---- "×2" seal : a doubled bad event keeps the artwork of its base type,
+   stamped with this badge (over the picture, or beside the compact emoji). ---- */
+.x2-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: bold; letter-spacing: .5px; line-height: 1; white-space: nowrap;
+    color: #fff2d0;
+    background: linear-gradient(to bottom, #c8321c, #8b1f10);
+    border: 2px solid var(--gold);
+    border-radius: 999px;
+    box-shadow: 0 2px 6px #000a;
+    text-shadow: 0 1px 2px #0009;
+    font-size: .82rem; padding: 3px 9px;
+}
+/* Stamped on the top-right corner of an illustration. */
+.event-illu .x2-badge, .toast-illu .x2-badge { position: absolute; top: 7px; right: 7px; }
+/* Bigger on the central announcement, where the picture is large. */
+.toast-illu .x2-badge {
+    top: 10px; right: 10px; font-size: 1.35rem; padding: 5px 14px; border-width: 3px;
+    box-shadow: 0 3px 10px #000b;
+}
+/* Compact mobile rail : right next to the emoji, on the same line. */
+.ev-icon-row { display: flex; align-items: center; justify-content: center; gap: 3px; }
+.ev-icon-row .x2-badge { font-size: .56rem; padding: 1px 5px; border-width: 1px; box-shadow: 0 1px 3px #000a; }
 .event-desc { font-size: .8rem; color: var(--muted); margin-top: 5px; line-height: 1.35; }
 .muted { color: var(--muted); }
 /* Resources as compact pictos with a count badge (kits / deck / fireballs). */

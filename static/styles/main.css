@@ -378,7 +378,7 @@ footer {
     box-shadow: 0 3px 12px #0008; background: #0004;
 }
 .markdown-body p > img:only-child {
-    float: right; width: min(190px, 38%); margin: 2px 0 10px 16px;
+    float: right; width: min(240px, 40%); margin: 2px 0 10px 16px;
 }
 /* Each illustration stays inside its own chapter. */
 .markdown-body h1, .markdown-body h2 { clear: both; }

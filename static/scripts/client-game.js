@@ -681,8 +681,42 @@ const EVENT_COLORS = {
     dragon: '#8b1a1a', gloom: '#2a2f6b', 'sudden-death': '#1a1a1a'
 };
 
-// Events that show a full illustration instead of an emoji icon.
-const EVENT_IMG = { dragon: portraitUrl('dragon') };
+// Every bad event has its own (landscape) illustration, shown in the central
+// toast, the left rail and the details modal. The emoji from EVENT_INFO is kept
+// for the compact mobile rail, where there is no room for a picture.
+// NB: the Dragon *phase* and the board token keep the original artwork
+// (adventurers/dragon.png and its portrait crop) — only the bad-event card uses
+// the illustration below.
+const BAD_EVENT_PATH = 'static/assets/bad-events/';
+const EVENT_IMG = {
+    fire: BAD_EVENT_PATH + 'fire.png',
+    curse: BAD_EVENT_PATH + 'curse.png',
+    poison: BAD_EVENT_PATH + 'poison.png',
+    dragon: BAD_EVENT_PATH + 'dragon.png',
+    gloom: BAD_EVENT_PATH + 'gloom.png',
+    'sudden-death': BAD_EVENT_PATH + 'sudden-death.png'
+};
+
+// A doubled card ("Incendie x2") keeps the illustration of its base type: the
+// doubling is marked by a ×2 seal stamped on the picture (or next to the emoji
+// in the compact rail) rather than spelled out again in the name.
+const x2Badge = (e) => (e && e.doubled) ? '<span class="x2-badge">×2</span>' : '';
+// Server labels already end with " x2"; drop it wherever the seal is shown next
+// to the name, so the information is not displayed twice.
+const eventName = (e) => e.doubled ? e.label.replace(/\s*x\s*2\s*$/i, '') : e.label;
+
+// The illustration of an event, with its ×2 seal when the card is doubled.
+// `variant` picks the sizing: 'toast' (central announcement) or 'inline'
+// (left rail + details modal).
+function eventIllustration(e, variant) {
+    const src = EVENT_IMG[e.type];
+    const info = EVENT_INFO[e.type] || { icon: '🎴' };
+    if (!src) return '<span class="' + (variant === 'toast' ? 'toast-icon' : 'event-icon') + '">' +
+        info.icon + '</span>' + x2Badge(e);
+    const wrapCls = variant === 'toast' ? 'toast-illu' : 'event-illu';
+    const imgCls = variant === 'toast' ? 'toast-img' : 'event-img';
+    return '<span class="' + wrapCls + '"><img class="' + imgCls + '" src="' + src + '" alt="">' + x2Badge(e) + '</span>';
+}
 
 // Large central toasts (bad events, hiding attempts, sudden death…). They are
 // queued so two announcements in the same state update play one after the other
@@ -711,13 +745,10 @@ function playNextBigToast() {
 
 // Large central toast shown when a bad event occurs.
 function showEventToast(ev) {
-    const info = EVENT_INFO[ev.type] || { icon: '🎴' };
     showBigToast({
         color: EVENT_COLORS[ev.type] || '#333',
-        iconHtml: EVENT_IMG[ev.type]
-            ? '<img class="toast-img" src="' + EVENT_IMG[ev.type] + '" alt="">'
-            : '<span class="toast-icon">' + info.icon + '</span>',
-        label: escapeHtml(ev.label || ''),
+        iconHtml: eventIllustration(ev, 'toast'),
+        label: escapeHtml(eventName(ev) || ''),
         ms: 3200
     });
 }
@@ -758,9 +789,11 @@ function playFx(fx) {
             if (fx.killed && fx.killed.length) lines.push('💀 Dévorés : ' + escapeHtml(fx.killed.join(', ')));
             if (fx.survived && fx.survived.length) lines.push('🕯️ Résistent : ' + escapeHtml(fx.survived.join(', ')));
             if (!lines.length) break;
+            // The "Mort subite" announcement (with its illustration) has just
+            // played; this second toast reports who survived the roll.
             showBigToast({
                 color: '#1a1a1a', iconHtml: '<span class="toast-icon">💀</span>',
-                label: 'Mort subite', sub: lines.join('<br>'), ms: 5000
+                label: 'Les ténèbres frappent', sub: lines.join('<br>'), ms: 5000
             });
             break;
         }
@@ -1035,28 +1068,27 @@ function renderEvent(state) {
     }
 
     const info = EVENT_INFO[e.type] || { icon: '🎴', desc: '' };
-    const iconHtml = EVENT_IMG[e.type]
-        ? '<img class="event-img" src="' + EVENT_IMG[e.type] + '" alt="">'
-        : '<span class="event-icon">' + info.icon + '</span>';
-    // Modal detail (used on mobile tap, and available anywhere).
-    $('#event-dialog').dialog('option', 'title', e.label);
-    $('#event-content').html('<div class="event-head">' + iconHtml + ' <b>' + escapeHtml(e.label) + '</b></div>' +
+    const illu = eventIllustration(e, 'inline');
+    const body = '<div class="event-head">' + illu + ' <b>' + escapeHtml(eventName(e)) + '</b></div>' +
         '<div class="event-desc">' + info.desc + '</div>' +
-        (e.type === 'poison' ? '<div class="hint">Actif jusqu\'à la prochaine phase d\'événement.</div>' : ''));
+        (e.doubled ? '<div class="hint">Carte <b>×2</b> : les effets sont appliqués deux fois.</div>' : '') +
+        (e.type === 'poison' ? '<div class="hint">Actif jusqu\'à la prochaine phase d\'événement.</div>' : '');
+
+    // Modal detail (used on mobile tap, and available anywhere). The title bar
+    // keeps the full card name — it cannot host the ×2 seal.
+    $('#event-dialog').dialog('option', 'title', e.label);
+    $('#event-content').html(body);
 
     if (expanded) {
-        // PC: full inline render (icon + name + description), everything visible.
-        $inline.html('<div class="event-head">' + iconHtml + ' <b>' + escapeHtml(e.label) + '</b></div>' +
-            '<div class="event-desc">' + info.desc + '</div>' +
-            (e.type === 'poison' ? '<div class="hint">Actif jusqu\'à la prochaine phase d\'événement.</div>' : ''));
+        // PC: full inline render (illustration + name + description).
+        $inline.html(body);
     } else {
-        // Mobile: emoji + name only, tap for details in the modal.
-        const smallIcon = EVENT_IMG[e.type]
-            ? '<img class="ev-mini-img" src="' + EVENT_IMG[e.type] + '" alt="">'
-            : '<span class="ev-emoji">' + info.icon + '</span>';
+        // Mobile: emoji + name only (the illustration would eat the whole rail);
+        // tapping opens the modal with the full picture and the description.
         $inline.addClass('has-event clickable')
             .css('--ev-color', EVENT_COLORS[e.type] || '#333')
-            .html(smallIcon + '<span class="ev-name">' + escapeHtml(e.label) + '</span>')
+            .html('<span class="ev-icon-row"><span class="ev-emoji">' + info.icon + '</span>' + x2Badge(e) + '</span>' +
+                '<span class="ev-name">' + escapeHtml(eventName(e)) + '</span>')
             .attr('title', 'Événement : ' + e.label + ' (voir le détail)')
             .on('click', () => $('#event-dialog').dialog('open'));
     }
