@@ -1018,9 +1018,20 @@ function renderHeader(state) {
                 (left > 0 ? ' (' + left + ' après lui)' : ' (dernier du tour)');
         }
     }
-    $('#turn-info').html('<span class="ti-round">Tour ' + state.round + (who ? ' · ' : '') + '</span>' +
-        '<span class="ti-who">' + who + '</span>' +
-        '<span class="ti-extra">' + extra + '</span>');
+    // The header carries the "whose turn" badge that used to be duplicated above
+    // the actions rail: green with a pointing hand when it is ours, neutral with
+    // an hourglass otherwise.
+    const my = isMyTurn();
+    const over = state.status !== 'PLAYING';
+    const ico = over ? 'fa-flag-checkered' : (my ? 'fa-hand-point-right' : 'fa-hourglass-half');
+    $('#turn-info')
+        .toggleClass('your-turn', my && !over)
+        .attr('title', over ? 'Partie terminée'
+            : (my ? 'À vous de jouer' : 'Tour de ' + (state.activeOwnerId || '…')))
+        .html('<i class="fas ' + ico + ' ti-ico"></i>' +
+            '<span class="ti-round">Tour ' + state.round + (who ? ' · ' : '') + '</span>' +
+            '<span class="ti-who">' + who + '</span>' +
+            '<span class="ti-extra">' + extra + '</span>');
 
     if (state.suddenDeath) $('#turns-left').attr('title', 'Mort subite').html('<span class="sudden">💀<span class="tl-lbl"> MORT SUBITE</span></span>');
     else $('#turns-left').attr('title', 'Tours restants').html('<i class="fas fa-hourglass-half tl-ico"></i><span class="tl-lbl">Tours restants : </span>' + state.turnsLeft);
@@ -1078,7 +1089,9 @@ function compactPartyCard(c, state) {
     const hpBar = '<div class="hp-bar"><div class="hp-fill" style="width:' + hpPct + '%"></div></div>';
     const isActive = c.id === state.activeId;
     const arrow = isActive ? '<span class="active-arrow"></span>' : '';
-    const apRow = isActive
+    // Action points as yellow pips only — counting them is enough, and an empty
+    // row is dropped rather than left hanging.
+    const apRow = (isActive && (state.ap > 0 || state.freeMoves))
         ? '<div class="pc-ap" title="Points d\'action">' + apPips(state.ap) +
           (state.freeMoves ? '<span class="pc-free">+' + state.freeMoves + '</span>' : '') + '</div>'
         : '';
@@ -1103,8 +1116,8 @@ function detailedPartyCard(c, state) {
     const hpBar = '<div class="hp-bar"><div class="hp-fill" style="width:' + (c.maxHp ? (100 * c.hp / c.maxHp) : 0) + '%"></div></div>';
     const isActive = c.id === state.activeId;
     const arrow = isActive ? '<span class="active-arrow"></span>' : '';
-    const apRow = isActive
-        ? '<div class="pc-ap" title="Points d\'action">' + apPips(state.ap) + ' ' + state.ap + ' PA' +
+    const apRow = (isActive && (state.ap > 0 || state.freeMoves))
+        ? '<div class="pc-ap" title="Points d\'action">' + apPips(state.ap) +
           (state.freeMoves ? ' <span class="pc-free">(+' + state.freeMoves + ' dépl.)</span>' : '') + '</div>'
         : '';
     return '<div class="party-card detailed' + (isActive ? ' active' : '') + '" data-cid="' + c.id + '" title="' + abilitiesTip(c) + '" style="border-color:' + c.color + '">' + arrow +
@@ -1627,26 +1640,15 @@ function renderActions(state) {
     $('#effort-btn').prop('disabled', !my || !ac || !ac.conscious || state.effortUsed || blockedByPending);
     $('#endturn-btn').prop('disabled', !my || blockedByPending);
 
-    // Effort / end-turn : labelled in expanded mode, icon-only when compact.
+    // Effort / end-turn : labelled in expanded mode, icon-only when compact. The
+    // label is always the short "Passer" so both buttons keep the same size; the
+    // exact wording lives in the tooltip.
     $('#effort-btn').html('<span class="act-ico">' + faIco('dumbbell') + '</span><span class="act-lbl">Effort</span>');
-    const endLbl = ac && !ac.conscious ? 'Passer le tour' : (state.interrupt ? 'Finir l\'action' : 'Finir le tour');
-
-    if (state.status !== 'PLAYING') {
-        $('#active-banner').html('<i class="fas fa-flag-checkered"></i><span class="ab-lbl"> Partie terminée</span>').attr('title', 'Partie terminée').removeClass('your-turn');
-        $('#endturn-btn').attr('title', endLbl).html('<span class="act-ico">' + faIco('forward-step') + '</span><span class="act-lbl">' + endLbl + '</span>');
-    } else if (my) {
-        const koNote = ac && !ac.conscious ? ' (inconscient — passez votre tour)' : '';
-        const inter = state.interrupt ? ' ⚡ action immédiate' : '';
-        const who = 'À vous : ' + (ac ? escapeHtml(ac.name) : '');
-        $('#active-banner').html('<i class="fas fa-hand-point-right"></i>' + (state.interrupt ? ' <i class="fas fa-bolt"></i>' : '') + '<span class="ab-lbl"> ' + who + '</span>')
-            .attr('title', who + inter + koNote).addClass('your-turn');
-        $('#endturn-btn').attr('title', endLbl).html('<span class="act-ico">' + faIco('forward-step') + '</span><span class="act-lbl">' + endLbl + '</span>');
-    } else {
-        const owner = escapeHtml(state.activeOwnerId || '…');
-        $('#active-banner').html('<i class="fas fa-hourglass-half"></i><span class="ab-lbl"> Tour de ' + owner + '</span>')
-            .attr('title', 'Tour de ' + owner + (state.interrupt ? ' (action immédiate)' : '')).removeClass('your-turn');
-        $('#endturn-btn').attr('title', endLbl).html('<span class="act-ico">' + faIco('forward-step') + '</span><span class="act-lbl">' + endLbl + '</span>');
-    }
+    const endTip = state.status !== 'PLAYING' ? 'Partie terminée'
+        : (ac && !ac.conscious ? 'Passer le tour (inconscient)'
+            : (state.interrupt ? 'Finir l\'action immédiate' : 'Finir le tour'));
+    $('#endturn-btn').attr('title', endTip)
+        .html('<span class="act-ico">' + faIco('forward-step') + '</span><span class="act-lbl">Passer</span>');
 
     // Board hint
     if (Game.targeting) $('#board-hint').text(Game.targeting.title.replace(/<[^>]+>/g, ''));

@@ -355,6 +355,21 @@ async function run() {
             problems.push({ kind: 'layout', text: 'clicking a tile showed no description panel' });
         }
 
+        // "Somebody else's turn" is unreachable in a solo run, so force it: the
+        // header badge must drop the green and switch to the hourglass.
+        await cdp.eval("window.__myTurn = isMyTurn; isMyTurn = () => false; render(Game.state); true");
+        await sleep(300);
+        await shoot(cdp, '23-not-your-turn');
+        const notMine = await cdp.eval(`
+            (() => { const t = document.querySelector('#turn-info');
+                return { green: t.classList.contains('your-turn'),
+                         icon: (t.querySelector('.ti-ico') || {}).className || '' }; })()`);
+        if (notMine.green || !/hourglass/.test(notMine.icon)) {
+            problems.push({ kind: 'header', text: 'waiting state shows ' + JSON.stringify(notMine) });
+        }
+        await cdp.eval("isMyTurn = window.__myTurn; render(Game.state); true");
+        await sleep(300);
+
         // Trigger a real "Se cacher" (2 AP, the active adventurer starts with 2):
         // exercises the fx queue and shows whether its emoji renders on this OS.
         await cdp.eval(`

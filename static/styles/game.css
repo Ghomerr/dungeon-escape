@@ -14,11 +14,22 @@ body.in-game { height: 100dvh; overflow: hidden; }
 .gh-left, .gh-right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .gh-center { flex: 1; min-width: 0; text-align: center; }
 .gh-title { color: var(--gold); font-weight: bold; font-size: 1.05rem; white-space: nowrap; }
+/* Whose-turn badge (this replaces the banner that used to sit above the actions
+   rail): green with a pointing hand when it is ours, neutral with an hourglass
+   otherwise. The border is always there so the chip never changes size. */
 .turn-info {
     color: var(--gold-light); font-weight: bold; font-size: .85rem;
     display: inline-block; max-width: 100%;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;
+    padding: 3px 12px; border-radius: 999px;
+    border: 1px solid transparent;
 }
+.turn-info .ti-ico { margin-right: 6px; color: var(--gold); }
+.turn-info.your-turn {
+    background: linear-gradient(to bottom, #3a5a20, #2c4416);
+    border-color: #4f8f4a; color: #e7ffcf;
+}
+.turn-info.your-turn .ti-ico { color: #bff08a; }
 .turns-left { color: var(--muted); white-space: nowrap; }
 .turns-left .tl-ico { display: none; }
 .turns-left .sudden { color: var(--accent); font-weight: bold; }
@@ -562,15 +573,6 @@ body.in-game { height: 100dvh; overflow: hidden; }
 .tile { flex-wrap: wrap; gap: 0; padding: 2px; align-content: center; }
 
 /* ---- Actions (round icon buttons in the right rail) ---- */
-.active-banner {
-    width: 46px; height: 30px; border-radius: 8px;
-    display: flex; align-items: center; justify-content: center; gap: 4px;
-    background: var(--panel2); border: 1px solid var(--border); font-weight: bold;
-    color: var(--muted); flex: 0 0 auto;
-}
-.active-banner.your-turn { background: linear-gradient(to bottom, #3a5a20, #2c4416); color: #e7ffcf; border-color: #4f8f4a; }
-.active-banner .fa-bolt { color: #ffd23f; }
-
 /* Round action button: an icon in a circle, with AP-cost lightning pips below. */
 .round-act {
     position: relative;
@@ -701,10 +703,6 @@ body.in-game #game-emoji-bar.open {
 .rail-h3 { display: none; }
 .res-lbl { display: none; }
 .round-act .act-lbl { display: none; }
-.active-banner .ab-lbl { display: none; }
-/* The "à vous" banner is redundant in compact mode (the active arrow + header
-   already show whose turn it is) — hide it to save vertical space. */
-.game-main:not(.actions-expanded) .active-banner { display: none; }
 
 /* --- Expanded (PC / detailed) overrides --- */
 .game-main.party-expanded { --rail-left: 236px; }
@@ -720,6 +718,17 @@ body.in-game #game-emoji-bar.open {
 }
 .game-main.party-expanded .party-panel .rail-h3:first-of-type,
 .game-main.actions-expanded .actions-panel .rail-h3:first-of-type { margin-top: 4px; }
+
+/* Expanded rails only: the collapse arrows float on the first heading's line
+   instead of taking a row of their own. `sticky` keeps them reachable once the
+   rail scrolls; the negative margin is what actually reclaims the height, and
+   the heading is padded so its text never runs under the button. */
+.game-main.party-expanded .party-panel .rail-toggle,
+.game-main.actions-expanded .actions-panel .rail-toggle {
+    position: sticky; top: 0; z-index: 6; margin-bottom: -26px;
+}
+.game-main.party-expanded .party-panel .rail-h3:first-of-type { padding-right: 38px; }
+.game-main.actions-expanded .actions-panel .rail-h3:first-of-type { padding-left: 38px; }
 
 /* Party rail — detailed cards (original horizontal layout). */
 .game-main.party-expanded #party-list { gap: 7px; }
@@ -745,7 +754,9 @@ body.in-game #game-emoji-bar.open {
 }
 .pc-hp-detailed { font-size: .8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-top: 3px; }
 .party-card.detailed .hp-bar { flex: 1; height: 7px; }
-.party-card.detailed .pc-ap { justify-content: flex-start; gap: 3px; color: var(--gold-light); font-weight: bold; font-size: .8rem; margin-top: 3px; }
+/* Yellow lightning pips (never the pale gold of the surrounding text): counting
+   them is the whole point, so they must pop. */
+.party-card.detailed .pc-ap { justify-content: flex-start; gap: 3px; color: #ffd23f; font-weight: bold; font-size: .95rem; margin-top: 3px; }
 .party-card.detailed .pc-ap .pc-free { color: var(--muted); font-weight: normal; }
 .pc-owner { font-size: .72rem; color: var(--muted); margin-top: 2px; }
 .tag { font-size: .7rem; padding: 1px 6px; border-radius: 10px; font-weight: bold; }
@@ -782,13 +793,13 @@ body.in-game #game-emoji-bar.open {
 .game-main.party-expanded .party-panel .round-act:not(.act-pill) .act-lbl { display: inline; flex: 1; text-align: left; }
 .game-main.actions-expanded .actions-panel .round-act:not(.act-pill) .ap-pips,
 .game-main.party-expanded .party-panel .round-act:not(.act-pill) .ap-pips { display: none; }
-.game-main.actions-expanded .turn-controls { flex-direction: row; gap: 6px; margin: 12px 0; }
-.game-main.actions-expanded .turn-controls .round-act { flex: 1; justify-content: center; }
-.game-main.actions-expanded .turn-controls .round-act .act-lbl { flex: 0 1 auto; text-align: center; }
-.game-main.actions-expanded .active-banner {
-    width: 100%; height: auto; padding: 8px 10px; justify-content: center; font-weight: bold;
+/* Effort / Passer: side by side, same fixed height, labels on a single line. */
+.game-main.actions-expanded .turn-controls { flex-direction: row; gap: 6px; }
+.game-main.actions-expanded .turn-controls .round-act {
+    flex: 1 1 0; min-width: 0; height: 40px; padding: 0 10px;
+    justify-content: center; white-space: nowrap;
 }
-.game-main.actions-expanded .active-banner .ab-lbl { display: inline; }
+.game-main.actions-expanded .turn-controls .round-act .act-lbl { flex: 0 1 auto; text-align: center; }
 /* Compact rail : keep the journal/emoji buttons centred like the others. */
 .rail-extra { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
 
@@ -928,7 +939,6 @@ body.in-game #game-emoji-bar.open {
 @media (max-width: 600px) {
     :root { --rail-left: 66px; --rail-right: 58px; --header-h: 46px; }
     .round-act, .event-picto { width: 42px; height: 42px; }
-    .active-banner { width: 42px; }
     .pc-portrait { max-width: 48px; }
 }
 

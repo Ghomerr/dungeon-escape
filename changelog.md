@@ -30,6 +30,21 @@ Versions use a calendar scheme: `vYYYY.MM.DD`.
   on touch screens).
 
 ### Changed
+- **The "whose turn" badge moved into the header.** It was duplicated above the
+  actions rail, where it repeated what the header, the active arrow and the token
+  aura already said. The header chip now carries the look: green with a pointing
+  hand on your turn, neutral with an hourglass while you wait — and the rail
+  gains a row.
+- **The rail collapse arrows float on the first heading's line** ("Aventuriers",
+  "Actions de base") instead of taking a row of their own, on desktop only. With
+  the badge removed, the whole actions rail — Effort and Passer included — now
+  fits a 900 px screen without scrolling.
+- **"Finir le tour" is now "Passer"**, so it and Effort share the same fixed
+  height side by side. The precise wording (finish the immediate action, pass
+  while unconscious…) moved to the tooltip.
+- **Action-point pips in the party cards are yellow again** and no longer repeat
+  the number: counting the lightning bolts is enough. An adventurer with no
+  points left simply shows none.
 - **Roomy screens open with both rails expanded again.** The compact/detailed
   choice is now remembered *per layout*, so collapsing a rail on a phone no
   longer leaves the desktop stuck in compact mode; crossing the boundary
