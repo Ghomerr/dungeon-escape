@@ -69,7 +69,12 @@ exports.tileOpensToward = (tile, dir) => {
     return !!(tile.breaches && tile.breaches.includes(dir));
 };
 
-exports.edgeConnected = (board, tile, dir) => {
+/**
+ * `opts.ignoreDoors` : locked doors do not block. Dragons move this way — the
+ * rulebook lets them cross ledges and drops "sans contrainte"; only the cave
+ * walls stop them.
+ */
+exports.edgeConnected = (board, tile, dir, opts) => {
     if (!exports.tileOpensToward(tile, dir)) return false;
     const d = Tiles.DELTA[dir];
     const neighbour = exports.getTileAt(board, tile.row + d.row, tile.col + d.col);
@@ -77,7 +82,7 @@ exports.edgeConnected = (board, tile, dir) => {
     const back = Tiles.opposite(dir);
     if (!exports.tileOpensToward(neighbour, back)) return false;
     // A locked door blocks leaving its own tile through that door edge.
-    if (tile.doorLocked && tile.doorDir === dir) return false;
+    if (!(opts && opts.ignoreDoors) && tile.doorLocked && tile.doorDir === dir) return false;
     return true;
 };
 
@@ -85,7 +90,7 @@ exports.edgeConnected = (board, tile, dir) => {
  * BFS distance (in tiles) from a starting cell to every reachable placed tile.
  * Returns a map cellKey -> distance. Used for dragon targeting / spawning.
  */
-exports.bfsDistances = (board, startRow, startCol) => {
+exports.bfsDistances = (board, startRow, startCol, opts) => {
     const dist = {};
     const startKey = exports.cellKey(startRow, startCol);
     if (!board[startKey]) return dist;
@@ -95,7 +100,7 @@ exports.bfsDistances = (board, startRow, startCol) => {
         const tile = queue.shift();
         const baseDist = dist[exports.cellKey(tile.row, tile.col)];
         for (let dir = 0; dir < 4; dir++) {
-            if (!exports.edgeConnected(board, tile, dir)) continue;
+            if (!exports.edgeConnected(board, tile, dir, opts)) continue;
             const d = Tiles.DELTA[dir];
             const nKey = exports.cellKey(tile.row + d.row, tile.col + d.col);
             if (dist[nKey] === undefined) {
@@ -111,17 +116,17 @@ exports.bfsDistances = (board, startRow, startCol) => {
  * First step (direction) along the shortest path from (sr,sc) toward (tr,tc).
  * Returns a direction integer, or null if unreachable / already there.
  */
-exports.firstStepToward = (board, sr, sc, tr, tc) => {
+exports.firstStepToward = (board, sr, sc, tr, tc, opts) => {
     // BFS from the target, then from the source pick the neighbour with the
     // smallest distance to the target.
-    const distFromTarget = exports.bfsDistances(board, tr, tc);
+    const distFromTarget = exports.bfsDistances(board, tr, tc, opts);
     const startTile = exports.getTileAt(board, sr, sc);
     if (!startTile) return null;
     let bestDir = null;
     let bestDist = distFromTarget[exports.cellKey(sr, sc)];
     if (bestDist === undefined) return null;
     for (let dir = 0; dir < 4; dir++) {
-        if (!exports.edgeConnected(board, startTile, dir)) continue;
+        if (!exports.edgeConnected(board, startTile, dir, opts)) continue;
         const d = Tiles.DELTA[dir];
         const nKey = exports.cellKey(sr + d.row, sc + d.col);
         const nd = distFromTarget[nKey];

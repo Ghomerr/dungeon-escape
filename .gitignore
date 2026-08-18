@@ -4,3 +4,5 @@ node_modules/
 static/assets/tiles/_preview/
 static/assets/raws/
 tools/.devcheck/
+tools/sim/results-*.json
+regles.pdf

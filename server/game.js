@@ -14,6 +14,9 @@ const LOCKPICK_KITS = 6;
 const FIREBALL_USES = 3;
 const MULLIGAN_USES = 3;
 const DRAGON_RANGE = 7;
+// Dragons cannot cross the cave walls, but ledges, drops, floods, rubble and
+// squeezes never constrain them — so a locked door does NOT stop a Dragon.
+const DRAGON_PATH = { ignoreDoors: true };
 
 const PHASE = { ACTION: 'ACTION', DRAGON: 'DRAGON', EVENT: 'EVENT', END: 'END' };
 const GAME_STATUS = { PLAYING: 'PLAYING', WON: 'WON', LOST: 'LOST' };
@@ -118,6 +121,7 @@ function initGame(room) {
             dead: false,
             hidden: false,
             hideStreak: 0,
+            hideRound: null,    // last round "Se cacher" was used (streak tracking)
             shadowOut: false,
             bonusAp: 0,
             uses: { fireball: 0, mulligan: 0 }
@@ -202,12 +206,13 @@ function startRound(room) {
     g.round++;
     g.phase = PHASE.ACTION;
 
-    // Build the play queue starting at firstIndex, skipping escaped/dead chars.
+    // Build the play queue starting at firstIndex. Only the dead drop out :
+    // adventurers who reached the Exit keep playing (they may head back in).
     const ordered = [];
     for (let i = 0; i < g.order.length; i++) {
         const id = g.order[(g.firstIndex + i) % g.order.length];
         const c = getChar(g, id);
-        if (!c.escaped && !c.dead) ordered.push(id);
+        if (!c.dead) ordered.push(id);
     }
     g.queue = ordered;
     g.roundStartCount = ordered.length; // adventurers scheduled to play this round
@@ -253,10 +258,15 @@ function activateNext(room) {
     g.freeMoves = 0;
     g.freeMoveGrant = null;
 
-    // A shadow-walked hunter reappears as its only action : it just gets a turn.
     if (!c.conscious) {
         g.ap = 0;
         pushLog(room, '💤 ' + c.name + ' est inconscient et passe son tour.');
+    } else if (c.shadowOut) {
+        // Back from the shadows is the WHOLE turn : no action point to spend,
+        // reappearing is all this adventurer may do.
+        g.ap = 0;
+        c.bonusAp = 0;
+        pushLog(room, '🌒 ' + c.name + ' est dans l\'ombre : réapparaître est sa seule action.');
     } else {
         g.ap = 2 + (c.bonusAp || 0);
         c.bonusAp = 0;
@@ -316,8 +326,17 @@ function tileAt(g, row, col) {
     return Utils.getTileAt(g.board, row, col);
 }
 
+/** A Pénombre tile, dark or not — the Shadow Hunter's entry and exit points. */
+function isShadowTile(tile) {
+    return !!tile && (tile.kind === 'gloom' || tile.state === 'dark');
+}
+
+// Adventurers physically standing on a cell. A Shadow Hunter who used "Marche de
+// l'Ombre" has left the board (its figure sits on the character sheet), so no
+// tile effect can reach it.
 function charsOnCell(g, row, col) {
-    return g.characters.filter(c => !c.escaped && !c.dead && c.row === row && c.col === col);
+    return g.characters.filter(c => !c.escaped && !c.dead && !c.shadowOut &&
+        c.row === row && c.col === col);
 }
 
 function paladinProtects(g, row, col, exceptId) {
@@ -338,7 +357,8 @@ function applyDamage(room, char, amount) {
 }
 
 function healChar(room, char, amount) {
-    if (char.dead || char.escaped) return;
+    // Adventurers on the Exit cannot be hurt, but they can still be patched up.
+    if (char.dead) return;
     const wasUnconscious = !char.conscious;
     char.hp = Math.min(char.maxHp, char.hp + amount);
     if (char.hp > 0 && wasUnconscious) {
@@ -378,6 +398,9 @@ function applyAction(room, userId, action, payload) {
     if (action === 'pass') { endTurn(room); return { ok: true }; }
 
     if (!c.conscious) return { ok: false, error: 'unconscious' };
+
+    // Off the board in the shadows: reappearing is the only legal move.
+    if (c.shadowOut && action !== 'shadow-return') return { ok: false, error: 'in-shadow' };
 
     if (action === 'effort') {
         if (g.effortUsed) return { ok: false, error: 'effort-used' };
@@ -424,10 +447,18 @@ function enterTile(room, char, tile, opts = {}) {
     char.row = tile.row;
     char.col = tile.col;
 
-    if (tile.kind === 'exit') {
-        char.escaped = true;
-        pushLog(room, '🏃 ' + char.name + ' atteint la SORTIE et s\'échappe du Donjon !');
+    // `escaped` means "currently standing on the Exit tile" — the rulebook keeps
+    // the figure in play there (immune, untargetable) rather than removing it,
+    // so an adventurer may walk back into the dungeon to rescue a friend.
+    const wasOnExit = char.escaped;
+    char.escaped = tile.kind === 'exit';
+
+    if (char.escaped) {
+        pushLog(room, '🏃 ' + char.name + ' atteint la SORTIE, à l\'abri du Donjon !');
         return;
+    }
+    if (wasOnExit) {
+        pushLog(room, '🚪 ' + char.name + ' quitte la SORTIE et repart dans le Donjon !');
     }
 
     // Stepping onto a Dragon's tile is an instant knock-out (rules: sharing a
@@ -547,12 +578,17 @@ function beginPlacement(mode) {
 
 /**
  * Distinct orientations a tile may take at cell (nr,nc) when discovered in
- * direction `dir` from the source. A valid orientation must:
- *   - connect back to the source tile (so the new tile is reachable), and
- *   - match EVERY adjacent placed tile (a corridor on one side must face a
- *     corridor on the other, never a wall) — i.e. no "corridor into a wall".
- * Falls back to the source-only orientations if nothing matches all neighbours
- * (so an awkward drawn tile can still be placed rather than blocking the turn).
+ * direction `dir` from the source.
+ *
+ * The ONLY rule is the rulebook's: "il est possible de choisir l'orientation de
+ * la tuile, pourvu qu'une connexion soit réalisée" — the tile must connect back
+ * to the tile the adventurer is standing on. A corridor that ends up facing a
+ * neighbour's wall is perfectly legal (the two tiles simply are not connected,
+ * which `edgeConnected` already handles); forbidding it used to silently strip
+ * the player of orientations that open onto unexplored space.
+ *
+ * Orientations that also line up with every adjacent placed tile are listed
+ * FIRST, so the default proposed by the client stays the tidy one.
  */
 function orientationsForPlacement(g, shape, nr, nc, dir) {
     const base = Tiles.BASE_EXITS[shape] || [0];
@@ -570,15 +606,15 @@ function orientationsForPlacement(g, shape, nr, nc, dir) {
         const key = exits.join(',');
         if (seen[key]) continue;
         if (!exits.includes(opp)) continue; // must connect back to the source
-        let matchesAll = true;
-        for (const d of Object.keys(neighbourOpens)) {
-            if (exits.includes(Number(d)) !== neighbourOpens[d]) { matchesAll = false; break; }
-        }
-        if (!matchesAll) continue;
         seen[key] = true;
-        out.push({ rotation: r, exits });
+        let mismatches = 0;
+        for (const d of Object.keys(neighbourOpens)) {
+            if (exits.includes(Number(d)) !== neighbourOpens[d]) mismatches++;
+        }
+        out.push({ rotation: r, exits, mismatches });
     }
-    return out.length ? out : Tiles.orientationsFor(shape, dir);
+    out.sort((a, b) => a.mismatches - b.mismatches);
+    return out.map(o => ({ rotation: o.rotation, exits: o.exits }));
 }
 
 /** Step 2 : finalize the placement with the chosen tile + orientation. */
@@ -621,6 +657,14 @@ function confirmPlacement(room, char, payload) {
             tile.breaches = tile.breaches || [];
             if (!tile.breaches.includes(nd)) tile.breaches.push(nd);
         }
+    }
+
+    // A toxic cloud is still hanging in the air: a Nauséabonde tile revealed now
+    // is contaminated on the spot, which is exactly what makes Explorer risky
+    // during a Poison event.
+    if (g.poisonActive && tile.kind === 'poisonable') {
+        tile.state = 'poisoned';
+        g.poisonedCells.push(Utils.cellKey(p.nr, p.nc));
     }
 
     if (source === 'reserve') g.reserveTile = newReserve;
@@ -714,7 +758,7 @@ function doHeal(room, char, payload) {
     if (g.ap < 2) return { ok: false, error: 'no-ap' };
     const targetId = payload.targetId || char.id;
     const target = getChar(g, targetId);
-    if (!target || target.escaped || target.dead) return { ok: false, error: 'bad-target' };
+    if (!target || target.dead) return { ok: false, error: 'bad-target' };
     if (target.row !== char.row || target.col !== char.col) return { ok: false, error: 'not-same-tile' };
     if (target.hp >= target.maxHp && target.conscious) return { ok: false, error: 'full-hp' };
     spendAp(g, 2);
@@ -745,7 +789,9 @@ function doWalkBridge(room, char, payload) {
 
 function doExtinguish(room, char, payload, forcedCost) {
     const g = room.game;
-    const cost = forcedCost !== undefined ? forcedCost : (char.flags.extinguishCheap ? 2 : 2);
+    // The Dwarf's "Maîtrise des flammes" is a discount on the action itself, so
+    // it must apply to the base action too, not only to the ability button.
+    const cost = forcedCost !== undefined ? forcedCost : (char.flags.extinguishCheap ? 1 : 2);
     // Target tile : same tile or adjacent, must be on fire.
     const target = findTargetTile(g, char, payload);
     if (!target) return { ok: false, error: 'no-target' };
@@ -789,11 +835,33 @@ function doPickLock(room, char, payload) {
     return { ok: true };
 }
 
+/**
+ * Step 2 of "Marche de l'Ombre" : reappear on ANY revealed Pénombre tile, dark
+ * or not. This is the whole turn — it costs no action point, and ends it.
+ */
+function doShadowReturn(room, char, payload) {
+    const g = room.game;
+    if (!char.shadowOut) return { ok: false, error: 'not-in-shadow' };
+    const dest = payload.destCell ? g.board[payload.destCell] : null;
+    if (!isShadowTile(dest)) return { ok: false, error: 'bad-destination' };
+    char.shadowOut = false;
+    g.ap = 0;
+    enterTile(room, char, dest);
+    pushLog(room, '🌒 ' + char.name + ' resurgit de l\'ombre.');
+    pushFx(room, { kind: 'shadow-in', charId: char.id, name: char.name });
+    if (!checkGameEnd(room)) endTurn(room);
+    return { ok: true };
+}
+
 function doHide(room, char, payload) {
     const g = room.game;
     if (g.ap < 2) return { ok: false, error: 'no-ap' };
     spendAp(g, 2);
-    char.hideStreak = (char.hideStreak || 0) + 1;
+    // The automatic success is for the third CONSECUTIVE round of hiding : the
+    // streak restarts as soon as a round goes by without hiding.
+    char.hideStreak = (char.hideRound === g.round - 1 || char.hideRound === g.round)
+        ? (char.hideStreak || 0) + 1 : 1;
+    char.hideRound = g.round;
     const auto = char.hideStreak >= 3;
     const roll = talent(char);
     const success = auto || roll.success;
@@ -820,7 +888,7 @@ function doAbility(room, char, payload) {
             if (!char.flags.balmHeal) return { ok: false, error: 'no-ability' };
             if (g.ap < 1) return { ok: false, error: 'no-ap' };
             const target = getChar(g, payload.targetId);
-            if (!target || target.id === char.id || target.escaped || target.dead) return { ok: false, error: 'bad-target' };
+            if (!target || target.id === char.id || target.dead) return { ok: false, error: 'bad-target' };
             if (target.row !== char.row || target.col !== char.col) return { ok: false, error: 'not-same-tile' };
             spendAp(g, 1);
             healChar(room, target, 1);
@@ -855,9 +923,14 @@ function doAbility(room, char, payload) {
             const g = room.game;
             if (!char.flags.inspiration) return { ok: false, error: 'no-ability' };
             if (g.ap < 1) return { ok: false, error: 'no-ap' };
+            // "Ce pouvoir ne peut être utilisé qu'une fois par tour." Each
+            // adventurer acts once per round, so per-round == per-turn, and it
+            // survives the interrupt stack unlike a game-level flag.
+            if (char.inspireRound === g.round) return { ok: false, error: 'inspiration-used' };
             const target = getChar(g, payload.targetId);
-            if (!target || target.id === char.id || target.escaped || target.dead || !target.conscious) return { ok: false, error: 'bad-target' };
+            if (!target || target.id === char.id || target.dead || !target.conscious || target.shadowOut) return { ok: false, error: 'bad-target' };
             spendAp(g, 1);
+            char.inspireRound = g.round;
             // The inspired adventurer plays immediately with 1 bonus action point.
             g.interruptStack.push({ activeId: g.activeId, ap: g.ap, freeMoves: g.freeMoves, freeMoveGrant: g.freeMoveGrant, effortUsed: g.effortUsed });
             g.activeId = target.id;
@@ -876,6 +949,20 @@ function doAbility(room, char, payload) {
             const dir = payload.dir;
             if (dir === undefined) return { ok: false, error: 'no-direction' };
             const here = tileAt(g, char.row, char.col);
+            const d = Tiles.DELTA[dir];
+            const neighbour = tileAt(g, char.row + d.row, char.col + d.col);
+            // What matters is whether a passage ALREADY EXISTS, not whether our
+            // own tile happens to have a corridor there: a corridor that dies on
+            // the neighbour's wall is exactly what the explosive is for. Only
+            // refuse when the two tiles are genuinely already connected.
+            const opensOut = Utils.tileOpensToward(here, dir);
+            const doorBlocks = !!(here.doorLocked && here.doorDir === dir);
+            if (!neighbour) {
+                // Empty cell : only worth blasting if a wall actually stands there.
+                if (opensOut) return { ok: false, error: 'already-open' };
+            } else if (opensOut && Utils.tileOpensToward(neighbour, Tiles.opposite(dir)) && !doorBlocks) {
+                return { ok: false, error: 'already-connected' };
+            }
             spendAp(g, 2);
             char.uses.fireball++;
             // Blast a wall : record a "breach" opening in that direction (and on the
@@ -885,9 +972,9 @@ function doAbility(room, char, payload) {
                 here.breaches = here.breaches || [];
                 if (!here.breaches.includes(dir)) here.breaches.push(dir);
             }
-            here.doorLocked = false;
-            const d = Tiles.DELTA[dir];
-            const neighbour = tileAt(g, char.row + d.row, char.col + d.col);
+            // Blowing up a wall only frees THAT edge — a locked door on another
+            // side of the tile stays locked.
+            if (here.doorDir === dir) here.doorLocked = false;
             if (neighbour) {
                 const back = Tiles.opposite(dir);
                 if (!neighbour.exits.includes(back)) {
@@ -896,33 +983,30 @@ function doAbility(room, char, payload) {
                 }
             }
             pushLog(room, '💥 ' + char.name + ' lance une Boule de feu et perce une paroi (' + char.uses.fireball + '/' + FIREBALL_USES + ') !');
-            // The blast triggers an immediate Fire event ("Éboulement" in the old
-            // rules). It consumes one card from the timed deck (advancing the doom
-            // clock like a regular event) but always resolves as an Incendie.
-            const card = g.eventDeck.length ? g.eventDeck.shift() : null;
-            if (card) {
-                g.eventsResolved++;
-                resolveEvent(room, { type: 'fire', label: Events.LABELS.fire, doubled: false });
-            } else {
-                pushLog(room, '⏳ Plus d\'événement à déclencher (mort subite).');
-            }
+            // The blast resolves an Incendie IMMEDIATELY, on the spot. It must NOT
+            // draw from the misfortune pile: the rulebook says "Résolvez
+            // immédiatement un événement Éboulement", it never spends a Danger
+            // card, so the doom clock is untouched.
+            resolveFire(room);
+            checkGameEnd(room);
             return { ok: true };
         }
         case 'shadow-walk': {
+            // Step 1 of two. The rulebook removes the figure from the board and
+            // parks it on the character sheet; the reappearance is the WHOLE of
+            // the next turn. So this never teleports on the spot.
             const g = room.game;
             if (!char.flags.shadowWalk) return { ok: false, error: 'no-ability' };
+            if (char.shadowOut) return { ok: false, error: 'already-in-shadow' };
             if (g.ap < 2) return { ok: false, error: 'no-ap' };
             const here = tileAt(g, char.row, char.col);
-            const onShadow = here.kind === 'gloom' || here.state === 'dark';
-            if (!onShadow) return { ok: false, error: 'not-on-shadow' };
-            // Teleport to a chosen gloom/dark tile.
-            const destKey = payload.destCell;
-            const dest = destKey ? g.board[destKey] : null;
-            if (!dest || (dest.kind !== 'gloom' && dest.state !== 'dark')) return { ok: false, error: 'bad-destination' };
+            if (!isShadowTile(here)) return { ok: false, error: 'not-on-shadow' };
             spendAp(g, 2);
-            char.row = dest.row;
-            char.col = dest.col;
-            pushLog(room, '🌑 ' + char.name + ' emprunte la Marche de l\'Ombre.');
+            char.shadowOut = true;
+            char.hidden = false;         // off the board entirely, no need to hide
+            pushLog(room, '🌑 ' + char.name + ' se fond dans l\'ombre et disparaît du Donjon.');
+            pushFx(room, { kind: 'shadow-out', charId: char.id, name: char.name });
+            endTurn(room);               // nothing else can be done while gone
             return { ok: true };
         }
         default:
@@ -962,6 +1046,7 @@ const ACTIONS = {
     extinguish: doExtinguish,
     'pick-lock': doPickLock,
     hide: doHide,
+    'shadow-return': doShadowReturn,
     ability: doAbility
 };
 
@@ -971,11 +1056,12 @@ const ACTIONS = {
 
 function dragonTargets(g) {
     return g.characters.filter(c =>
-        c.conscious && !c.escaped && !c.dead && !c.hidden && !c.flags.dragonImmune);
+        c.conscious && !c.escaped && !c.dead && !c.hidden && !c.shadowOut &&
+        !c.flags.dragonImmune);
 }
 
 function nearestTarget(g, dragon) {
-    const dist = Utils.bfsDistances(g.board, dragon.row, dragon.col);
+    const dist = Utils.bfsDistances(g.board, dragon.row, dragon.col, DRAGON_PATH);
     let best = null, bestDist = Infinity;
     for (const c of dragonTargets(g)) {
         const dd = dist[Utils.cellKey(c.row, c.col)];
@@ -1011,7 +1097,7 @@ function moveOneDragon(room, dragon) {
         pushLog(room, '🐉 Un Dragon ne trouve plus de proie et disparaît.');
         return;
     }
-    const dir = Utils.firstStepToward(g.board, dragon.row, dragon.col, target.row, target.col);
+    const dir = Utils.firstStepToward(g.board, dragon.row, dragon.col, target.row, target.col, DRAGON_PATH);
     if (dir === null) {
         // The only way a targetable adventurer is at distance 0 is that we are
         // already sharing its tile (e.g. it walked onto the dragon). A dragon
@@ -1045,7 +1131,9 @@ function runDragonPhase(room, times = 1, reason = 'phase') {
 function spawnDragon(room) {
     const g = room.game;
     if (g.dragons.length >= MAX_DRAGONS) return;
-    const conscious = consciousInDungeon(g);
+    // A lair is chosen by its distance to a potential VICTIM, so an adventurer
+    // who is off the board (in the shadows) attracts nothing.
+    const conscious = consciousInDungeon(g).filter(c => !c.shadowOut);
     if (conscious.length === 0) return;
 
     // Find the dragon-lair tile (no dragon yet) closest to a conscious adventurer.
@@ -1054,7 +1142,7 @@ function spawnDragon(room) {
         const tile = g.board[key];
         if (tile.kind !== 'dragon-lair') continue;
         if (g.dragons.some(dr => dr.row === tile.row && dr.col === tile.col)) continue;
-        const dist = Utils.bfsDistances(g.board, tile.row, tile.col);
+        const dist = Utils.bfsDistances(g.board, tile.row, tile.col, DRAGON_PATH);
         for (const c of conscious) {
             const dd = dist[Utils.cellKey(c.row, c.col)];
             if (dd !== undefined && dd < bestDist) { bestDist = dd; bestLair = tile; }
@@ -1081,6 +1169,7 @@ function runEventPhase(room) {
         if (tile && tile.state === 'poisoned') tile.state = 'normal';
     }
     g.poisonedCells = [];
+    g.poisonActive = false;
 
     if (g.eventDeck.length === 0) {
         g.suddenDeath = true;
@@ -1137,21 +1226,28 @@ function resolveCurse(room) {
 function resolveGloom(room) {
     const g = room.game;
     let affected = 0;
+    // Step 1 : every Pénombre tile not already dark becomes Obscurité totale.
     for (const key of Object.keys(g.board)) {
         const tile = g.board[key];
         if (tile.kind === 'gloom' && tile.state !== 'dark') {
             tile.state = 'dark';
             affected++;
-            // Adventurers caught on a newly-darkened tile lose 1 HP.
-            for (const c of charsOnCell(g, tile.row, tile.col)) {
-                if (c.flags.nightVision) continue;
-                if (paladinProtects(g, c.row, c.col, c.id)) continue;
-                applyDamage(room, c, 1);
-                pushLog(room, '🌑 ' + c.name + ' est surpris par l\'obscurité et perd 1 PV.');
-            }
         }
     }
-    if (affected === 0) pushLog(room, '🌑 Obscurité totale : aucune tuile pénombre découverte.');
+    // Step 2 : THEN every adventurer standing on a dark tile loses 1 HP — the
+    // rulebook damages everyone in the dark, not only those on freshly
+    // darkened tiles.
+    for (const key of Object.keys(g.board)) {
+        const tile = g.board[key];
+        if (tile.state !== 'dark') continue;
+        for (const c of charsOnCell(g, tile.row, tile.col)) {
+            if (c.flags.nightVision) continue;
+            if (paladinProtects(g, c.row, c.col, c.id)) continue;
+            applyDamage(room, c, 1);
+            pushLog(room, '🌑 ' + c.name + ' est surpris par l\'obscurité et perd 1 PV.');
+        }
+    }
+    if (affected === 0) pushLog(room, '🌑 Obscurité totale : aucune nouvelle tuile pénombre découverte.');
 }
 
 function resolvePoison(room) {
@@ -1170,6 +1266,9 @@ function resolvePoison(room) {
         }
     }
     g.poisonedCells = poisoned;
+    // The cloud stays until the next event phase and also contaminates tiles
+    // revealed in the meantime — which is what makes Explorer risky here.
+    g.poisonActive = true;
     if (poisoned.length === 0) pushLog(room, '☠️ Poison : aucune tuile nauséabonde découverte.');
 }
 
@@ -1233,6 +1332,20 @@ function checkGameEnd(room) {
 
     // Game continues as long as a conscious adventurer remains in the dungeon.
     if (consciousLeft > 0) return false;
+
+    // Nobody conscious left in the dungeon itself — but adventurers standing on
+    // the Exit are still in play and may walk back in to wake a fallen friend.
+    // The run only stops once there is nothing left to attempt.
+    const downedInDungeon = g.characters.filter(c => !c.dead && !c.escaped && !c.conscious).length;
+    const rescuers = g.characters.filter(c => c.escaped && c.conscious).length;
+    if (downedInDungeon > 0 && rescuers > 0) {
+        if (!g.rescueNotice) {
+            g.rescueNotice = true;
+            pushLog(room, '🚨 Plus personne de conscient dans le Donjon. Les aventuriers sur la SORTIE ' +
+                'peuvent y retourner pour réveiller les autres — ou attendre la mort subite.');
+        }
+        return false;
+    }
 
     // No conscious adventurer left to act : resolve the outcome.
     const abandoned = total - escaped; // unconscious + dead left in the dungeon
@@ -1307,6 +1420,7 @@ function buildState(room) {
             id: c.id, name: c.name, emoji: c.emoji, color: c.color, level: c.level,
             hp: c.hp, maxHp: c.maxHp, row: c.row, col: c.col,
             conscious: c.conscious, escaped: c.escaped, dead: c.dead, hidden: c.hidden,
+            shadowOut: !!c.shadowOut,
             ownerId: c.ownerId,
             abilities: c.abilities,
             uses: c.uses

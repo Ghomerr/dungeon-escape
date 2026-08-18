@@ -159,7 +159,7 @@ const DUNGEON_ACTIONS = [
 const ABILITY_MODE = {
     'flame-mastery': 'dirHere', 'apply-balm': 'otherSameTile', 'animal-celerity': 'none',
     'lockpicking': 'none', 'slay-dragon': 'none', 'inspiration': 'otherAny',
-    'fireball': 'fireballDir', 'shadow-walk': 'shadowDest'
+    'fireball': 'fireballDir', 'shadow-walk': 'none'
 };
 
 // --- Bootstrap -------------------------------------------------------------
@@ -344,6 +344,12 @@ Socket.on('game-error', (data) => {
         'not-on-shadow': 'Vous devez être sur une tuile Pénombre / Obscurité.', 'bad-destination': 'Destination invalide.',
         'unconscious': 'Cet aventurier est inconscient.', 'finish-placement': 'Terminez d\'abord le placement de la tuile.',
         'no-mulligan-left': 'Plus de Repli stratégique disponible.',
+        'already-connected': 'Ces deux tuiles sont déjà reliées : inutile de percer ici.',
+        'in-shadow': 'Cet aventurier est dans l\'ombre : il ne peut que réapparaître.',
+        'not-in-shadow': 'Cet aventurier n\'est pas dans l\'ombre.',
+        'already-in-shadow': 'Cet aventurier est déjà dans l\'ombre.',
+        'already-open': 'Ce côté est déjà ouvert : vous pouvez y découvrir une tuile directement.',
+        'inspiration-used': 'Inspiration déjà utilisée ce tour-ci.',
         'run-move-only': 'Pendant une course / célérité, seul le déplacement est possible.',
         'nothing-to-cancel': 'Rien à annuler (le déplacement a déjà commencé).'
     };
@@ -475,7 +481,7 @@ function runActionMode(mode, def, isAbility) {
         case 'dir': openDirPicker({ title: def.label }, (dir) => emit({ dir })); break;
         case 'dirHere': openDirPicker({ title: def.label, here: true }, (dir) => emit(dir === 'here' ? {} : { dir })); break;
         case 'sameTile': {
-            const cands = Game.state.characters.filter(c => !c.escaped && !c.dead && c.row === ac.row && c.col === ac.col);
+            const cands = Game.state.characters.filter(c => !c.dead && !c.shadowOut && c.row === ac.row && c.col === ac.col);
             if (!cands.length) return;
             // Alone on the tile : heal oneself immediately, no target to pick.
             if (cands.length === 1) { emit({ targetId: cands[0].id }); return; }
@@ -483,31 +489,40 @@ function runActionMode(mode, def, isAbility) {
             break;
         }
         case 'otherSameTile': {
-            const cands = Game.state.characters.filter(c => c.id !== ac.id && !c.escaped && !c.dead && c.row === ac.row && c.col === ac.col);
+            const cands = Game.state.characters.filter(c => c.id !== ac.id && !c.dead && !c.shadowOut && c.row === ac.row && c.col === ac.col);
             if (!cands.length) { Dialog.openSimpleDialog($('#simple-dialog'), 'Aucune cible', 'Aucun autre aventurier sur cette tuile.'); return; }
             targetChars(cands, '💚 ' + def.label + ' : cliquez l\'aventurier à cibler.');
             break;
         }
         case 'otherAny': {
-            const cands = Game.state.characters.filter(c => c.id !== ac.id && !c.escaped && !c.dead && c.conscious);
+            const cands = Game.state.characters.filter(c => c.id !== ac.id && !c.dead && !c.shadowOut && c.conscious);
             if (!cands.length) return;
             targetChars(cands, '💚 ' + def.label + ' : cliquez l\'aventurier à inspirer.');
             break;
         }
         case 'fireballDir': {
-            // A fireball blasts a WALL open : only the sides with no usable
-            // opening (or blocked by a locked door) are worth targeting.
+            // A fireball blasts a WALL open. What counts is whether a passage
+            // ALREADY EXISTS between the two tiles — not whether our own tile has
+            // a corridor on that side. A corridor ending on the neighbour's wall
+            // is precisely the case the explosive is meant to solve.
             const here = tileAt(ac.row, ac.col);
             const cells = [];
             for (let dir = 0; dir < 4; dir++) {
-                const blocked = !tileOpensToward(here, dir) || (here.doorLocked && here.doorDir === dir);
-                if (!blocked) continue;
+                const nb = tileAt(ac.row + DELTA[dir].r, ac.col + DELTA[dir].c);
+                const opensOut = tileOpensToward(here, dir);
+                const doorBlocks = !!(here.doorLocked && here.doorDir === dir);
+                // Empty cell : a wall must actually stand there (otherwise you can
+                // already Découvrir / Explorer through it for free).
+                const worth = nb
+                    ? (!opensOut || !tileOpensToward(nb, OPP(dir)) || doorBlocks)
+                    : !opensOut;
+                if (!worth) continue;
                 cells.push({
                     row: ac.row + DELTA[dir].r, col: ac.col + DELTA[dir].c,
                     onPick: () => emit({ dir })
                 });
             }
-            if (!cells.length) { Dialog.openSimpleDialog($('#simple-dialog'), 'Aucune paroi', 'Toutes les issues de cette tuile sont déjà ouvertes.'); return; }
+            if (!cells.length) { Dialog.openSimpleDialog($('#simple-dialog'), 'Aucune paroi', 'Cette tuile est déjà reliée à toutes ses voisines : il n\'y a aucune paroi à faire exploser.'); return; }
             startTargeting({
                 charId: ac.id, cls: 'tgt-orange', mark: '<i class="fas fa-burst"></i>',
                 title: '💥 Boule de feu : cliquez la paroi à faire exploser.', cells
@@ -515,14 +530,16 @@ function runActionMode(mode, def, isAbility) {
             break;
         }
         case 'shadowDest': {
+            // Reappearing: ANY revealed Pénombre tile, dark or not. The hunter is
+            // off the board, so no tile is excluded.
             const cells = Object.keys(Game.state.board)
                 .map(k => Game.state.board[k])
-                .filter(t => (t.kind === 'gloom' || t.state === 'dark') && !(t.row === ac.row && t.col === ac.col))
+                .filter(t => t.kind === 'gloom' || t.state === 'dark')
                 .map(t => ({ row: t.row, col: t.col, onPick: () => emit({ destCell: cellKey(t.row, t.col) }) }));
-            if (!cells.length) { Dialog.openSimpleDialog($('#simple-dialog'), 'Aucune destination', 'Aucune autre tuile Pénombre / Obscurité.'); return; }
+            if (!cells.length) { Dialog.openSimpleDialog($('#simple-dialog'), 'Aucune destination', 'Aucune tuile Pénombre / Obscurité découverte.'); return; }
             startTargeting({
                 charId: ac.id, cls: 'tgt-purple', mark: '<i class="fas fa-moon"></i>',
-                title: '🌑 Marche de l\'Ombre : cliquez la tuile de réapparition.', cells
+                title: '🌒 Cliquez la tuile Pénombre où réapparaître.', cells
             });
             break;
         }
@@ -658,8 +675,43 @@ function moveWithConfirm(tile, ac, doIt) {
         'Se déplacer quand même', doIt, 'Annuler', null);
 }
 
+// Tile info is NOT on left-click: a plain click is how you walk onto a tile, and
+// the adventurer then stands on it — you never got to read the panel. Inspecting
+// is a right-click on desktop and a long press on touch (see bindTileInspect).
+const LONG_PRESS_MS = 450;
+function bindTileInspect($el, tile) {
+    $el.on('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showTileDesc(tile, e.currentTarget);
+    });
+    let timer = null, start = null;
+    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    $el.on('touchstart', (e) => {
+        const t = e.originalEvent.touches[0];
+        const el = e.currentTarget;
+        start = { x: t.clientX, y: t.clientY };
+        cancel();
+        timer = setTimeout(() => {
+            timer = null;
+            // Swallow the click that the browser fires after the press, so the
+            // adventurer does not walk onto the tile the player just inspected.
+            Game._suppressTileClick = true;
+            setTimeout(() => { Game._suppressTileClick = false; }, 700);
+            showTileDesc(tile, el);
+        }, LONG_PRESS_MS);
+    });
+    $el.on('touchmove', (e) => {
+        if (!start || !timer) return;
+        const t = e.originalEvent.touches[0];
+        // A pan / scroll is not a long press.
+        if (Math.abs(t.clientX - start.x) > 10 || Math.abs(t.clientY - start.y) > 10) cancel();
+    });
+    $el.on('touchend touchcancel', cancel);
+}
+
 function onTileClick(tile, el) {
-    showTileDesc(tile, el);
+    if (Game._suppressTileClick) { Game._suppressTileClick = false; return; }
     // While aiming an action, only the highlighted cells / tokens are actionable.
     if (Game.targeting) return;
     if (!isMyTurn()) return;
@@ -695,8 +747,8 @@ function onTileClick(tile, el) {
         if (blockedByOwnDoor) items.push({ label: ACTION_ICON['pick-lock'] + ' Crocheter la porte qui bloque ce passage (2 PA)', fn: () => sendAction('pick-lock', {}) });
     }
 
-    // The description is already shown permanently (#tile-desc panel), so the
-    // menu only contains actions.
+    // The menu only contains actions : the tile description lives behind a
+    // right-click / long press (see bindTileInspect).
     if (!items.length) return;
     if (items.length === 1) { items[0].fn(); return; }
     openMenu('Tuile ' + (TILE_INFO[tile.kind] || {}).label, items);
@@ -983,7 +1035,7 @@ function spawnHpFx(state) {
         state.characters.forEach(c => {
             const before = prev[c.id];
             if (before === undefined || before === c.hp) return;
-            if (c.escaped || c.dead) return;   // no token on the board
+            if (c.dead || c.shadowOut) return;   // no token on the board
             const pos = tokenCenter(c.id);
             if (!pos) return;
             const healed = c.hp > before;
@@ -1079,8 +1131,9 @@ function renderParty(state) {
 // Compact card (mobile / collapsed rail): portrait + HP + AP pips, status badge.
 function compactPartyCard(c, state) {
     let statusIco = '', statusCls = '';
-    if (c.escaped) { statusIco = '<i class="fas fa-door-open"></i>'; statusCls = ' st-escaped'; }
-    else if (c.dead) { statusIco = '<i class="fas fa-skull"></i>'; statusCls = ' st-dead'; }
+    if (c.dead) { statusIco = '<i class="fas fa-skull"></i>'; statusCls = ' st-dead'; }
+    else if (c.escaped) { statusIco = '<i class="fas fa-door-open"></i>'; statusCls = ' st-escaped'; }
+    else if (c.shadowOut) { statusIco = '<i class="fas fa-moon"></i>'; statusCls = ' st-shadow'; }
     else if (!c.conscious) { statusIco = '<i class="fas fa-star-of-life"></i>'; statusCls = ' st-ko'; }
     else if (c.hidden) { statusIco = '<i class="fas fa-mask"></i>'; statusCls = ' st-hidden'; }
     const statusBadge = statusIco ? '<span class="pc-status' + statusCls + '">' + statusIco + '</span>' : '';
@@ -1109,8 +1162,9 @@ function compactPartyCard(c, state) {
 // status tag, HP text, AP and owner.
 function detailedPartyCard(c, state) {
     let status = '';
-    if (c.escaped) status = '<span class="tag escaped">échappé</span>';
-    else if (c.dead) status = '<span class="tag dead">mort</span>';
+    if (c.dead) status = '<span class="tag dead">mort</span>';
+    else if (c.escaped) status = '<span class="tag escaped">à la Sortie</span>';
+    else if (c.shadowOut) status = '<span class="tag shadow">dans l\'ombre</span>';
     else if (!c.conscious) status = '<span class="tag ko">inconscient</span>';
     else if (c.hidden) status = '<span class="tag hidden">caché</span>';
     const hpBar = '<div class="hp-bar"><div class="hp-fill" style="width:' + (c.maxHp ? (100 * c.hp / c.maxHp) : 0) + '%"></div></div>';
@@ -1136,8 +1190,9 @@ function detailedPartyCard(c, state) {
 // health bar (the rails only have space for a crop and a number).
 function openCharDialog(c) {
     let statusTxt = '';
-    if (c.escaped) statusTxt = '<span class="cd-status st-escaped">Échappé</span>';
-    else if (c.dead) statusTxt = '<span class="cd-status st-dead">Mort</span>';
+    if (c.dead) statusTxt = '<span class="cd-status st-dead">Mort</span>';
+    else if (c.escaped) statusTxt = '<span class="cd-status st-escaped">À la Sortie (à l\'abri)</span>';
+    else if (c.shadowOut) statusTxt = '<span class="cd-status st-shadow">Dans l\'ombre</span>';
     else if (!c.conscious) statusTxt = '<span class="cd-status st-ko">Inconscient</span>';
     else if (c.hidden) statusTxt = '<span class="cd-status st-hidden">Caché</span>';
 
@@ -1385,8 +1440,12 @@ function renderBoard(state) {
             $tile.append($tok);
             animateIfMoved($tok, $tile, 'd' + d.id, d.row, d.col, prevPos, curPos);
         });
-        state.characters.filter(c => !c.escaped && !c.dead && c.row === t.row && c.col === t.col).forEach(c => {
-            const koCls = (c.conscious ? '' : ' ko') + (c.hidden ? ' tok-hidden' : '');
+        // Adventurers on the Exit tile stay on the board (they are safe there but
+        // still in play). Only the dead and those gone into the shadows have no
+        // token at all.
+        state.characters.filter(c => !c.dead && !c.shadowOut && c.row === t.row && c.col === t.col).forEach(c => {
+            const koCls = (c.conscious ? '' : ' ko') + (c.hidden ? ' tok-hidden' : '') +
+                (c.escaped ? ' tok-safe' : '');
             // Green halo + click handler when this adventurer is a legal target
             // of the action being aimed (heal, balm, inspiration…).
             const asTarget = tgt && tgt.chars && tgt.chars.find(x => x.id === c.id);
@@ -1408,6 +1467,7 @@ function renderBoard(state) {
         });
 
         $tile.click((e) => onTileClick(t, e.currentTarget));
+        bindTileInspect($tile, t);
         $board.append($tile);
     });
 
@@ -1462,7 +1522,7 @@ function renderBoard(state) {
  */
 function renderTokenActions($board, state, ac) {
     if (!isMyTurn() || state.pending || Game.targeting) return;
-    if (!ac || ac.escaped || ac.dead) return;
+    if (!ac || ac.dead || ac.shadowOut) return;
     if (state.ap > 0 || state.freeMoves > 0) return;
     const pos = tokenCenter(ac.id);
     if (!pos) return;
@@ -1537,15 +1597,23 @@ function renderPlacement(state) {
             $opts.append($opt);
         });
         $block.append($opts);
+        // What this tile actually does, spelled out under the orientations: the
+        // choice is final, so the player must be able to judge it here.
+        if (info.desc) $block.append('<div class="cand-desc">' + escapeHtml(info.desc) + '</div>');
         $c.append($block);
     });
 
+    // The tile is drawn : it MUST be placed. Only the orientation (and the
+    // Gnome's redraw) is still open — there is no going back to the pile.
     const buttons = [];
     if (p.canReroll) buttons.push({ text: 'Repli stratégique (' + p.mulliganLeft + ')', click: () => sendAction('reroll-placement', {}) });
-    buttons.push({ text: 'Annuler', click: () => { $d.dialog('close'); sendAction('cancel-placement', {}); } });
     $d.dialog('option', 'title', modeLabel + ' une tuile');
     $d.dialog('option', 'buttons', buttons);
+    $d.dialog('option', 'closeOnEscape', false);
+    // Hide the title-bar close button: closing without placing is not a legal move.
+    $d.dialog('option', 'open', function () { $(this).parent().find('.ui-dialog-titlebar-close').hide(); });
     if (!$d.dialog('isOpen')) $d.dialog('open');
+    $d.parent().find('.ui-dialog-titlebar-close').hide();
 }
 
 function renderActions(state) {
@@ -1626,7 +1694,19 @@ function renderActions(state) {
 
     const $abil = $('#ability-actions').empty();
     $('#active-char-name').text(ac ? '— ' + ac.name : '');
-    if (ac) {
+    // Gone into the shadows: reappearing is the whole turn, so it replaces every
+    // other action rather than sitting among them.
+    if (ac && ac.shadowOut) {
+        const def = { action: 'shadow-return', label: 'Réapparaître', cost: 0, mode: 'shadowDest' };
+        const $b = $('<button class="round-act act-pill">' +
+            pillHtml(faIco('moon'), def.label, 0, '<span class="ap-cost">tout le tour</span>') + '</button>');
+        $b.attr('title', 'Marche de l\'Ombre : réapparaissez sur une tuile Pénombre / Obscurité de votre choix. C\'est votre seule action du tour.');
+        $b.prop('disabled', !my || blockedByPending);
+        if (my && !blockedByPending) $b.click(() => runActionMode(def.mode, def, false));
+        $abil.append($b);
+        $('#base-actions').empty();
+        $('#dungeon-actions').empty();
+    } else if (ac) {
         ac.abilities.filter(a => !a.passive).forEach(a => {
             if (a.id === 'animal-celerity' && state.cancelRunKind === 'animal-celerity') { $abil.append(buildCancelBtn('Annuler la célérité')); return; }
             const def = { action: 'ability', abilityId: a.id, label: a.name, cost: a.cost, mode: ABILITY_MODE[a.id] || 'none', tip: a.description };
@@ -1655,7 +1735,7 @@ function renderActions(state) {
     else if (blockedByPending && state.pending.ownerId !== Player.id) $('#board-hint').text('Un joueur place une tuile…');
     else if (blockedByPending) $('#board-hint').text('Choisissez l\'orientation de la tuile dans la fenêtre.');
     else if (my && ac && ac.conscious && running) $('#board-hint').text('Déplacement en cours (' + freeMoves + ' restant' + (freeMoves > 1 ? 's' : '') + ') : cliquez une tuile adjacente. Seul le déplacement est possible.');
-    else if (my && ac && ac.conscious) $('#board-hint').text('Cliquez une tuile adjacente pour agir, ou un emplacement « + » pour explorer/découvrir.');
+    else if (my && ac && ac.conscious) $('#board-hint').text('Cliquez une tuile adjacente pour agir, ou un emplacement « + » pour explorer/découvrir. Clic droit (ou appui long) sur une tuile pour voir ce qu\'elle fait.');
     else $('#board-hint').text('En attente du tour des autres joueurs…');
 }
 
@@ -1726,7 +1806,17 @@ const TUTO_STEPS = [
         title: 'Le Donjon',
         html: '<p>Voici le Donjon. Il ne contient au départ que la tuile de <b>Départ</b> 🟢 : tout le reste est à découvrir.</p>' +
             '<p>Les couloirs doivent se correspondre d\'une tuile à l\'autre — on ne traverse jamais un mur.</p>' +
-            '<p><b>Clique sur une tuile</b> pour lire ce qu\'elle fait, et sur une tuile voisine pour agir dessus.</p>'
+            '<p><b>Clique sur une tuile voisine</b> pour agir dessus : t\'y déplacer, éteindre un incendie…</p>'
+    },
+    {
+        sel: '#board',
+        title: 'Inspecter une tuile',
+        html: '<p>Pour savoir <b>ce que fait</b> une tuile sans marcher dessus :</p>' +
+            '<ul><li>sur ordinateur : <b>clic droit</b> sur la tuile ;</li>' +
+            '<li>sur mobile : garde le <b>doigt appuyé</b> dessus un instant.</li></ul>' +
+            '<p>Une fiche apparaît juste à côté et se dissipe toute seule. Ça marche aussi sur la tuile où tu te ' +
+            'trouves déjà — très pratique avant de décider où finir ton tour, car certaines tuiles sont ' +
+            'dangereuses quand l\'événement fâcheux tombe !</p>'
     },
     {
         sel: '#board .ghost-active',

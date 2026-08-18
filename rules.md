@@ -225,6 +225,10 @@ Les aventuriers commencent sur cette première tuile placée dès le début de l
 ## Tuile Sortie (x1)
 C'est la tuile qui permet de sortir du **Donjon** et de gagner la partie. Les **aventuriers** sur cette tuile sont immunisés aux **événements fâcheux**, et ne pas peuvent perdre de points de vie, ni être la cible des **Dragons**.
 
+Un **aventurier** sur la tuile **Sortie** n'est **pas** retiré de la partie : il continue de jouer normalement et reçoit ses 2 points d'action à chaque tour. Il peut donc choisir de **repartir dans le Donjon** — par exemple pour aller réveiller un compagnon inconscient — mais il perd alors son immunité tant qu'il n'est pas revenu sur la tuile **Sortie**.
+
+La partie prend fin quand tous les **aventuriers** survivants sont sur la tuile **Sortie**, ou quand il ne reste plus aucun **aventurier** dans le **Donjon**.
+
 ## Tuiles Simples (x16)
 Ce sont des tuiles sans danger, en forme de couloir, coude ou carrefour.
 

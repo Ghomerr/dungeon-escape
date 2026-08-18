@@ -3,6 +3,117 @@
 All notable changes to Dungeon Escape are documented here.
 Versions use a calendar scheme: `vYYYY.MM.DD`.
 
+## v2026.08.18
+
+Every rule below was checked against the original **Sub Terra** rulebook (the
+game this one is based on), not just against `rules.md`. Net effect: the game got
+slightly *harder*, because most of the divergences were quietly favouring the
+players. Normal difficulty is now as close to the printed rules as the engine can
+express — a looser "easy" mode will be built on top of it.
+
+### Fixed
+- **Reaching the Exit no longer takes you out of the game.** The rulebook keeps
+  the figure on the Exit tile: safe from every source of damage and invisible to
+  the dragons, but *still playing*, with its 2 action points each turn. It can
+  now walk back into the dungeon to wake a fallen team-mate and carry the rank
+  from Bronze to Gold — a whole layer of endgame decisions that simply did not
+  exist before. The run ends when every survivor is on the Exit, or when nobody
+  is left in the dungeon at all; when only unconscious adventurers remain and
+  somebody is standing on the Exit, the journal now says so instead of ending
+  the game behind your back.
+- **The Shadow Walk is a two-step ability again.** It used to teleport on the
+  spot for 2 AP. The rulebook removes the figure from the board and makes the
+  reappearance the *whole* of the next turn: the hunter vanishes (untouchable by
+  tiles, events and dragons while gone), then comes back on any revealed
+  Pénombre tile — dark or not — as its only action. The action bar collapses to
+  a single "Réapparaître" button on that turn.
+- **Locked doors no longer stop a dragon.** Dragon pathfinding used the same
+  connectivity as adventurers, so a ledge or a drop walled them off. The
+  rulebook lets them cross ledges, drops, floods, rubble and squeezes "sans
+  contrainte" — only the cave walls stop them. They now hunt, spawn and measure
+  their 7-tile range through locked doors.
+- **The Fireball no longer costs you a turn.** It used to draw and burn a card
+  from the misfortune pile, so the Engineer's three blasts silently cut three
+  turns off the doom clock. The rulebook resolves a Cave-in *on the spot*
+  without ever spending a Danger card — it now does the same.
+- **The Fireball can finally open the wall you are staring at.** It refused any
+  side where your own tile had a corridor, even when that corridor died on the
+  neighbour's wall — exactly the dead end you wanted to blast through. It now
+  looks at whether the two tiles are really connected, and only refuses a
+  passage that already exists. Blasting also stops unlocking a door sitting on a
+  *different* edge of the tile.
+- **The Dwarf's Flame Mastery now works from the action bar.** "Éteindre un
+  incendie" charged him the full 2 AP (`extinguishCheap ? 2 : 2`); his 1 AP
+  discount only applied through the ability button.
+- **Hiding no longer becomes permanently automatic.** The third-attempt free
+  success is meant for three *consecutive* rounds; the streak was never reset,
+  so from the third hide of the game onward every attempt succeeded outright.
+- **Toxic fumes now contaminate tiles revealed while the cloud is up.** The
+  rulebook is explicit that this "rend l'action Explorer plus risquée" — a
+  Nauséabonde tile drawn during an active Poison is poisoned on the spot.
+- **Total darkness hurts everyone standing in it**, not only the adventurers on
+  tiles that just went dark.
+- **The Bard's Inspiration is once per turn**, as printed on the Leader's sheet.
+  With 2 AP he could previously chain it twice.
+- **Tile orientation is no longer over-restricted.** The engine demanded that a
+  placed tile line up with *every* adjacent tile; the rulebook only asks for a
+  connection back to the tile you stand on. Elbows now always offer their 2
+  orientations and tees their 3 — the tidy option is still proposed first.
+
+### Changed
+- **Tile info moved to right-click / long press.** Left-clicking a tile is how
+  you walk onto it, so the description panel popped up over the tile you were
+  about to leave and you never got to read it. Inspecting is now a right-click
+  on desktop, a long press on touch, and works on your own tile too — useful
+  before deciding where to end a turn. The guided tour gained a step explaining
+  the gesture, and the board hint mentions it.
+- **A drawn tile must be placed.** The discovery modal no longer offers
+  "Annuler" (nor a close button): once the tile is off the pile the only choice
+  left is its orientation, or the Gnome's redraw. The modal now also prints what
+  the tile does underneath the orientations, since the choice is final.
+
+### Tooling
+- **`tools/sim/check-fixes.js`**: 38 assertions driving the real engine, one per
+  rule fixed above, so a future refactor cannot quietly undo them.
+- **`tools/devcheck.js`** gained four probes: the tile panel must open on
+  right-click and *not* on a plain click, the placement modal must expose no
+  cancel / close affordance while showing a tile description, an adventurer in
+  the shadows must see nothing but "Réapparaître", and one standing on the Exit
+  must keep a token on the board.
+- **`tools/sim/bot.js`** understands the new states: it stays put on the Exit
+  unless a rescue is worth the trip, and reappears when caught in the shadows.
+
+## v2026.08.17
+
+### Tooling
+- **Headless game simulator** (`tools/sim/`): runs the real engine
+  (`server/game.js`) with a heuristic bot controlling every adventurer, driving
+  it through `Game.applyAction()` with the same payloads as the web client — so
+  a simulated game is a genuine game, not a model of one. 300 games run in about
+  3 seconds, which makes balance questions answerable in minutes instead of
+  evenings.
+  - `simulate.js` aggregates win rate, rank, tiles placed, AP spent per action,
+    damage per source and turns lost to unconsciousness.
+  - `ablation.js` removes one element at a time (an event type, the dragons, the
+    HP attrition) to see which one actually moves the win rate.
+  - `rebalance.js` scores candidate fixes across 4/5/6 adventurers,
+    `by-character.js` splits results by which adventurer was in the party, and
+    `trace.js` replays a single seeded game with the full engine journal.
+  - Ablations are applied *after* `initGame()` and never patch the engine, so
+    measurements always reflect the shipped rules.
+- **Difficulty audit** (`tools/sim/RAPPORT-AUDIT.md`): 7 000 simulated games plus
+  a line-by-line comparison of the engine against `rules.md`. Normal difficulty
+  currently wins **3.8 %** of games with 4 adventurers, 1.2 % with 5 and 1.4 %
+  with 6 — losing ten games in a row is the expected outcome, not bad luck.
+  The report documents the cause (the Exit tile sits 60-64 tiles deep, which
+  forces the party to scatter, while healing and reviving require standing on
+  the same tile), the AP and HP budgets that make it unwinnable, the rule
+  deviations found, and the measured effect of each candidate fix.
+- **Test protocol** (`tools/sim/README.md`): how to re-run every measurement,
+  which sample sizes separate which effect sizes, and the known blind spots of
+  the bot (it never uses the Paladin's Sacrifice, the Fireball or the Bard's
+  Inspiration), so future numbers stay comparable.
+
 ## v2026.08.09
 
 ### Added

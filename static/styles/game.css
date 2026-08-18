@@ -178,6 +178,7 @@ body.in-game { height: 100dvh; overflow: hidden; }
     box-shadow: 0 1px 2px #000;
 }
 .pc-status.st-escaped { background: #2c5e2c; }
+.pc-status.st-shadow { background: #3b2b57; }
 .pc-status.st-dead { background: #4a1010; }
 .pc-status.st-ko { background: #7a5e14; }
 .pc-status.st-hidden { background: #2a2a4a; }
@@ -252,6 +253,7 @@ body.in-game { height: 100dvh; overflow: hidden; }
 .char-detail .cd-hp-num { color: var(--gold-light); font-size: .82rem; font-weight: bold; margin-top: 3px; }
 .char-detail .cd-status { display: inline-block; margin-top: 5px; font-size: .72rem; font-weight: bold; padding: 1px 8px; border-radius: 10px; }
 .char-detail .cd-status.st-escaped { background: #2c5e2c; color: #cfe; }
+.char-detail .cd-status.st-shadow { background: #3b2b57; color: #e2d8f5; }
 .char-detail .cd-status.st-dead { background: #4a1010; color: #fbb; }
 .char-detail .cd-status.st-ko { background: #7a5e14; color: #ffe; }
 .char-detail .cd-status.st-hidden { background: #2a2a4a; color: #cce; }
@@ -479,6 +481,8 @@ body.in-game { height: 100dvh; overflow: hidden; }
 /* Hidden adventurer (successful "Se cacher") : the token fades out, mirroring
    the mask badge shown on the character card. */
 .char-token.tok-hidden { opacity: .4; filter: grayscale(.35); }
+/* Safe on the Exit tile: still in play, but shielded from everything. */
+.char-token.tok-safe { box-shadow: 0 0 0 2px #6ddf6d, 0 0 10px #6ddf6d88; }
 
 /* ---- Out-of-AP shortcuts, pinned under the active token ---- */
 .tok-actions {
@@ -761,6 +765,7 @@ body.in-game #game-emoji-bar.open {
 .pc-owner { font-size: .72rem; color: var(--muted); margin-top: 2px; }
 .tag { font-size: .7rem; padding: 1px 6px; border-radius: 10px; font-weight: bold; }
 .tag.escaped { background: #2c5e2c; color: #cfe; }
+.tag.shadow { background: #3b2b57; color: #e2d8f5; }
 .tag.dead { background: #4a1010; color: #fbb; }
 .tag.ko { background: #5a4a14; color: #ffe; }
 .tag.hidden { background: #2a2a4a; color: #cce; }
@@ -820,6 +825,9 @@ body.in-game #game-emoji-bar.open {
 .orient-options { display: flex; gap: 8px; flex-wrap: wrap; }
 .orient-btn { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px; padding: 6px; width: 88px; height: 92px; box-sizing: border-box; }
 .orient-label { font-size: .72rem; color: var(--muted); }
+/* Tile effect recap under the orientations: the placement is final, so the
+   player has to be able to judge the tile right here. */
+.cand-desc { margin-top: 8px; font-size: .78rem; line-height: 1.35; color: var(--muted); border-top: 1px solid var(--border); padding-top: 6px; }
 .mini-tile { position: relative; width: 54px; height: 54px; background: #2c2419; border: 1px solid #0007; overflow: hidden; }
 .mini-art {
     position: absolute; inset: 0;

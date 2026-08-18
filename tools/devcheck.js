@@ -333,8 +333,10 @@ async function run() {
         await shoot(cdp, '20-character-modal');
         await cdp.eval("$('#char-dialog').dialog('close'), true");
 
-        // Tile description: must land next to the tile that was clicked.
-        await cdp.eval("$('#board .tile').not('.ghost-cell').first().click(), true");
+        // Tile description: opened by RIGHT-CLICK (or long press on touch), never
+        // by a plain click — a left click is how you walk onto the tile. It must
+        // land next to the tile that was inspected.
+        await cdp.eval("$('#board .tile').not('.ghost-cell').first().trigger('contextmenu'), true");
         await sleep(400);
         await shoot(cdp, '21-tile-desc');
         const desc = await cdp.eval(`
@@ -352,7 +354,53 @@ async function run() {
                 problems.push({ kind: 'layout', text: 'the tile description is far from the clicked tile (dx=' + desc.dx + ', dy=' + desc.dy + ')' });
             }
         } else {
-            problems.push({ kind: 'layout', text: 'clicking a tile showed no description panel' });
+            problems.push({ kind: 'layout', text: 'right-clicking a tile showed no description panel' });
+        }
+        // ...and a plain left click must NOT open it (it would cover the tile the
+        // adventurer is about to step onto).
+        await cdp.eval("$('#tile-desc').hide(); $('#board .tile').not('.ghost-cell').first().click(), true");
+        await sleep(300);
+        const leftOpened = await cdp.eval(
+            "(() => { const p = document.querySelector('#tile-desc'); return !!p && p.style.display !== 'none'; })()");
+        if (leftOpened) {
+            problems.push({ kind: 'layout', text: 'a plain left click still opens the tile description panel' });
+        }
+
+        // Placement modal: once a tile is drawn it MUST be placed — no Cancel —
+        // and it has to say what the tile does, since the choice is final.
+        await cdp.eval("sendAction('discover', { dir: 0 }), true");
+        await sleep(600);
+        await shoot(cdp, '24-placement-modal');
+        const place = await cdp.eval(`
+            (() => {
+                const d = document.querySelector('#placement-dialog');
+                if (!d || !d.offsetParent) return null;
+                const box = d.closest('.ui-dialog') || d.parentElement;
+                const btns = [...box.querySelectorAll('.ui-dialog-buttonpane button')].map(b => b.textContent.trim());
+                const closeBtn = box.querySelector('.ui-dialog-titlebar-close');
+                return {
+                    buttons: btns,
+                    closeVisible: !!(closeBtn && closeBtn.offsetParent),
+                    descs: d.querySelectorAll('.cand-desc').length,
+                    orients: d.querySelectorAll('.orient-btn').length
+                };
+            })()`);
+        if (!place) {
+            log('  · placement modal auto-resolved (single orientation) — nothing to check');
+        } else {
+            log('  · placement modal: buttons=' + JSON.stringify(place.buttons) +
+                ' close=' + place.closeVisible + ' desc=' + place.descs + ' orient=' + place.orients);
+            if (place.buttons.some(b => /annuler/i.test(b))) {
+                problems.push({ kind: 'rules', text: 'the placement modal still offers "Annuler" (a drawn tile must be placed)' });
+            }
+            if (place.closeVisible) {
+                problems.push({ kind: 'rules', text: 'the placement modal can still be closed without placing the tile' });
+            }
+            if (!place.descs) {
+                problems.push({ kind: 'layout', text: 'the placement modal shows no tile description' });
+            }
+            await cdp.eval("$('#placement-dialog .orient-btn').first().click(), true");
+            await sleep(400);
         }
 
         // "Somebody else's turn" is unreachable in a solo run, so force it: the
@@ -381,6 +429,55 @@ async function run() {
             })()`);
         await sleep(900);
         await shoot(cdp, '22-hide-toast');
+
+        // Two states the engine can reach but a scripted solo run cannot reliably
+        // produce, so drive the renderer directly and restore afterwards.
+        //  (a) Shadow Hunter gone into the shadows: reappearing must REPLACE every
+        //      other action, not sit among them.
+        const shadowUi = await cdp.eval(`
+            (() => {
+                const ac = Game.state.characters.find(c => c.id === Game.state.activeId);
+                if (!ac) return null;
+                ac.shadowOut = true; render(Game.state);
+                const abil = [...document.querySelectorAll('#ability-actions button')].map(b => b.textContent.trim());
+                const out = {
+                    abilities: abil,
+                    base: document.querySelectorAll('#base-actions button').length,
+                    dungeon: document.querySelectorAll('#dungeon-actions button').length
+                };
+                ac.shadowOut = false; render(Game.state);
+                return out;
+            })()`);
+        if (shadowUi) {
+            log('  · shadow-out UI: ' + JSON.stringify(shadowUi));
+            if (shadowUi.base || shadowUi.dungeon) {
+                problems.push({ kind: 'rules', text: 'an adventurer in the shadows still shows normal actions' });
+            }
+            if (!shadowUi.abilities.some(t => /r.appara/i.test(t))) {
+                problems.push({ kind: 'rules', text: 'no "Réapparaître" button while in the shadows' });
+            }
+        }
+        //  (b) An adventurer standing on the Exit stays ON the board (still in
+        //      play), flagged as safe.
+        const exitUi = await cdp.eval(`
+            (() => {
+                const ac = Game.state.characters.find(c => c.id === Game.state.activeId);
+                if (!ac) return null;
+                ac.escaped = true; render(Game.state);
+                const tok = document.querySelector('.char-token[data-cid="' + ac.id + '"]');
+                const out = { onBoard: !!tok, safe: !!(tok && tok.classList.contains('tok-safe')) };
+                ac.escaped = false; render(Game.state);
+                return out;
+            })()`);
+        if (exitUi) {
+            log('  · on-exit UI: ' + JSON.stringify(exitUi));
+            if (!exitUi.onBoard) {
+                problems.push({ kind: 'rules', text: 'an adventurer on the Exit tile has no token on the board' });
+            }
+            if (!exitUi.safe) {
+                problems.push({ kind: 'layout', text: 'an adventurer on the Exit tile is not marked as safe' });
+            }
+        }
 
         // Extra element shots requested on the command line (--shot name=selector).
         for (let i = 0; i < args.length; i++) {
