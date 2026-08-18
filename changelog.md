@@ -9,7 +9,39 @@ Every rule below was checked against the original **Sub Terra** rulebook (the
 game this one is based on), not just against `rules.md`. Net effect: the game got
 slightly *harder*, because most of the divergences were quietly favouring the
 players. Normal difficulty is now as close to the printed rules as the engine can
-express — a looser "easy" mode will be built on top of it.
+express, and a **Facile** mode plus an optional **objets** variant sit on top of
+it for players who want a run they can actually finish.
+
+### Added
+- **Facile difficulty.** The audit showed the Exit tile sitting 60-64 tiles deep
+  was what decided a run on its own, so Facile cuts the exploration pile to **40
+  tiles** (the Exit still shuffled among the last five), gives every adventurer
+  **+1 HP**, and deals **3 extra misfortune cards** — the very concession the
+  rulebook itself suggests. Measured over 400 games with 4 adventurers: **2.8 %
+  → 24.5 %** wins, and the Exit now gets found in 81 % of runs instead of 25 %.
+- **Objets variant** (a checkbox next to the difficulty, available everywhere
+  except Expert):
+  - **Potions** hide in one tile out of six. The first adventurer to step on one
+    drinks it for **+1 HP** — and leaves it behind when already at full health,
+    so it goes to whoever needs it.
+  - **Parchemins** are not found in tiles but earned by cleaning the dungeon up:
+    slaying a Dragon (1 in 2), putting out a fire (1 in 3), or blasting a wall
+    with a Fireball (1 in 3). They pile up in a **team stock**.
+  - Reading a Parchemin puts an unconscious adventurer back on their feet at
+    **1 HP, anywhere in the dungeon, for no action point** — the direct answer
+    to the death spiral the audit measured (a fallen adventurer used to stay
+    down for the rest of the game). The moment somebody drops, the game offers
+    to spend one on them. Decline and it stays in stock: it will be offered
+    again for the next adventurer to fall, and clicking the counter in the
+    resources rail asks **which fallen adventurer** to raise. A Parchemin only
+    ever targets an unconscious adventurer, never one already on their feet nor
+    one devoured during sudden death.
+  - Worth roughly half a difficulty step: **×1.6 to ×1.8** on the win rate
+    wherever it is allowed, with 3.6 to 5.2 potions drunk and 0.6 to 0.8
+    parchemins read per game.
+- **The difficulty panel now states what actually changes**: turns before sudden
+  death, size of the exploration pile, bonus HP and whether "x2" events are in.
+  No more guessing what "Avancé" costs you.
 
 ### Fixed
 - **Reaching the Exit no longer takes you out of the game.** The rulebook keeps
@@ -81,7 +113,13 @@ express — a looser "easy" mode will be built on top of it.
   the shadows must see nothing but "Réapparaître", and one standing on the Exit
   must keep a token on the board.
 - **`tools/sim/bot.js`** understands the new states: it stays put on the Exit
-  unless a rescue is worth the trip, and reappears when caught in the shadows.
+  unless a rescue is worth the trip, reappears when caught in the shadows, reads
+  a Parchemin the moment somebody is down, and detours for a Potion when hurt.
+- **`tools/sim/matrix.js`**: the full recap — every difficulty × items on/off ×
+  4/5/6 adventurers, reporting win rate, rank breakdown, survivors and turns.
+  8 400 games in about a minute; `--md` prints it as a Markdown table.
+- **`tools/sim/RAPPORT-AUDIT.md` §8** records that recap, so the effect of a
+  future balance change can be read against a known baseline.
 
 ## v2026.08.17
 

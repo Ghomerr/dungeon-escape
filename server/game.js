@@ -18,6 +18,18 @@ const DRAGON_RANGE = 7;
 // squeezes never constrain them — so a locked door does NOT stop a Dragon.
 const DRAGON_PATH = { ignoreDoors: true };
 
+const DIFFICULTIES = ['easy', 'normal', 'advanced', 'expert'];
+// "Facile" trims the exploration pile: the Exit tile is what gates a run, and
+// 40 tiles is roughly two thirds of the way to it.
+const EASY_DECK_SIZE = 40;
+const EASY_BONUS_HP = 1;
+
+// Optional "objets" variant.
+const POTION_CHANCE = 6;        // 1 in 6 when a tile is discovered / explored
+const SCROLL_ON_DRAGON = 2;     // 1 in 2 when a dragon is destroyed
+const SCROLL_ON_FIRE = 3;       // 1 in 3 when a fire is put out
+const SCROLL_ON_FIREBALL = 3;   // 1 in 3 when the Pyromancer blasts a wall
+
 const PHASE = { ACTION: 'ACTION', DRAGON: 'DRAGON', EVENT: 'EVENT', END: 'END' };
 const GAME_STATUS = { PLAYING: 'PLAYING', WON: 'WON', LOST: 'LOST' };
 
@@ -28,6 +40,7 @@ const GAME_STATUS = { PLAYING: 'PLAYING', WON: 'WON', LOST: 'LOST' };
 function initLobbyData(room) {
     room.selectedCharacters = []; // [{ charId, ownerId }]
     room.difficulty = 'normal';
+    room.itemsEnabled = false;    // optional Potions & Parchemins variant
 }
 
 function humansCount(room) {
@@ -71,11 +84,37 @@ function removeSelection(room, charId, requesterId, isOwner) {
 }
 
 function setDifficulty(room, difficulty) {
-    if (['normal', 'advanced', 'expert'].includes(difficulty)) {
+    if (DIFFICULTIES.includes(difficulty)) {
         room.difficulty = difficulty;
+        // Items are a helping hand: Expert does without them.
+        if (difficulty === 'expert') room.itemsEnabled = false;
         return { ok: true };
     }
     return { ok: false, error: 'bad-difficulty' };
+}
+
+/** Potions & Parchemins variant — allowed on every difficulty but Expert. */
+function setItemsEnabled(room, enabled) {
+    if (room.difficulty === 'expert' && enabled) return { ok: false, error: 'items-not-in-expert' };
+    room.itemsEnabled = !!enabled;
+    return { ok: true };
+}
+
+/**
+ * What a difficulty actually changes, for the lobby blurb. `count` is the
+ * number of selected adventurers (the turn budget depends on it).
+ */
+function getDifficultyInfo(difficulty, count) {
+    const n = Math.max(4, Math.min(6, count || 4));
+    return {
+        id: difficulty,
+        label: difficultyLabel(difficulty),
+        turns: Events.getEventCount(n, difficulty),
+        tiles: difficulty === 'easy' ? EASY_DECK_SIZE : 64,
+        bonusHp: difficulty === 'easy' ? 1 : 0,
+        doubled: difficulty === 'advanced' || difficulty === 'expert',
+        allowsItems: difficulty !== 'expert'
+    };
 }
 
 function getCanStartGame(room) {
@@ -91,7 +130,11 @@ function getCanStartGame(room) {
 // ---------------------------------------------------------------------------
 
 function initGame(room) {
-    const deck = Utils.shuffle(Tiles.buildDeck());
+    const easy = room.difficulty === 'easy';
+    // "Facile" plays with a shorter pile. Cutting a shuffled deck keeps the
+    // family proportions intact on average, so the dungeon still feels the same.
+    let deck = Utils.shuffle(Tiles.buildDeck());
+    if (easy) deck = deck.slice(0, EASY_DECK_SIZE);
 
     // Shuffle the Exit tile among the last 5 tiles of the draw pile.
     const exitTile = Tiles.createExitTile();
@@ -102,6 +145,7 @@ function initGame(room) {
     const start = Tiles.createStartTile();
     const characters = room.selectedCharacters.map(sel => {
         const base = CHARACTERS.find(c => c.id === sel.charId);
+        const maxHp = base.maxHp + (easy ? EASY_BONUS_HP : 0);
         return {
             id: base.id,
             charId: base.id,
@@ -109,8 +153,8 @@ function initGame(room) {
             emoji: base.emoji,
             color: base.color,
             level: base.level,
-            maxHp: base.maxHp,
-            hp: base.maxHp,
+            maxHp: maxHp,
+            hp: maxHp,
             flags: base.flags,
             abilities: base.abilities,
             ownerId: sel.ownerId,
@@ -162,6 +206,10 @@ function initGame(room) {
         dragons: [],
         dragonSeq: 1,
         lockpickKits: LOCKPICK_KITS,
+        itemsEnabled: !!room.itemsEnabled && room.difficulty !== 'expert',
+        scrolls: 0,            // team stock of Parchemins (revive a fallen ally)
+        potionsFound: 0,       // stats only
+        scrollsFound: 0,
         fx: [],                // client-side feedback queue (toasts / animations)
         fxSeq: 0,
         log: []
@@ -169,11 +217,20 @@ function initGame(room) {
 
     pushLog(room, '🗝️ La partie commence ! Difficulté : ' + difficultyLabel(room.difficulty) +
         ' — ' + room.game.eventsTotal + ' tours avant la mort subite.');
+    if (easy) {
+        pushLog(room, '🍀 Mode Facile : pioche réduite à ' + EASY_DECK_SIZE +
+            ' tuiles et +' + EASY_BONUS_HP + ' PV pour chaque aventurier.');
+    }
+    if (room.game.itemsEnabled) {
+        pushLog(room, '🎁 Objets activés : des Potions se cachent dans le Donjon, ' +
+            'et des Parchemins peuvent être trouvés en le nettoyant.');
+    }
     startRound(room);
 }
 
 function difficultyLabel(d) {
-    return d === 'expert' ? 'Expert' : d === 'advanced' ? 'Avancé' : 'Normal';
+    return d === 'expert' ? 'Expert' : d === 'advanced' ? 'Avancé'
+        : d === 'easy' ? 'Facile' : 'Normal';
 }
 
 function pushLog(room, message) {
@@ -346,6 +403,20 @@ function paladinProtects(g, row, col, exceptId) {
         c.flags.sacrifice && c.row === row && c.col === col);
 }
 
+/**
+ * Somebody just dropped and the team is holding Parchemins : ask whether to
+ * spend one right now. It is only an offer — the client shows a modal, and the
+ * scroll can just as well be kept and used later from the items panel.
+ */
+function offerScroll(room, char) {
+    const g = room.game;
+    if (!g.itemsEnabled || g.scrolls <= 0) return;
+    pushFx(room, {
+        kind: 'scroll-offer', charId: char.id, name: char.name,
+        ownerId: char.ownerId, scrolls: g.scrolls
+    });
+}
+
 function applyDamage(room, char, amount) {
     if (amount <= 0 || char.escaped || char.dead) return;
     char.hp = Math.max(0, char.hp - amount);
@@ -353,7 +424,74 @@ function applyDamage(room, char, amount) {
         char.conscious = false;
         char.hidden = false;
         pushLog(room, '🩸 ' + char.name + ' tombe inconscient !');
+        offerScroll(room, char);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Objets (optional variant) : Potions on tiles, Parchemins in the team stock
+// ---------------------------------------------------------------------------
+
+/** A freshly placed tile may hide a Potion (1 chance in 6). */
+function maybeDropPotion(room, tile) {
+    const g = room.game;
+    if (!g.itemsEnabled || tile.kind === 'exit') return;
+    if (Math.floor(Math.random() * POTION_CHANCE) !== 0) return;
+    tile.item = 'potion';
+    g.potionsFound++;
+    pushLog(room, '🧪 Une Potion scintille sur la tuile fraîchement révélée.');
+}
+
+/** Cleaning the dungeon up sometimes yields a Parchemin. */
+function grantScroll(room, chanceOneIn, reason) {
+    const g = room.game;
+    if (!g.itemsEnabled) return false;
+    if (Math.floor(Math.random() * chanceOneIn) !== 0) return false;
+    g.scrolls++;
+    g.scrollsFound++;
+    pushLog(room, '📜 ' + reason + ' — un Parchemin est récupéré (' + g.scrolls + ' en réserve).');
+    pushFx(room, { kind: 'scroll-found', reason, total: g.scrolls });
+    return true;
+}
+
+/**
+ * Whoever steps on a tile first takes what lies there. A Potion is only drunk
+ * when it can actually heal, so a full-health adventurer leaves it for someone
+ * who needs it.
+ */
+function takeTileItem(room, char, tile) {
+    const g = room.game;
+    if (!g.itemsEnabled || !tile.item) return;
+    if (tile.item === 'potion') {
+        if (char.hp >= char.maxHp && char.conscious) return; // leave it behind
+        tile.item = null;
+        healChar(room, char, 1);
+        pushLog(room, '🧪 ' + char.name + ' boit une Potion (+1 PV).');
+        pushFx(room, { kind: 'potion', charId: char.id, name: char.name });
+    } else if (tile.item === 'scroll') {
+        tile.item = null;
+        g.scrolls++;
+        pushLog(room, '📜 ' + char.name + ' ramasse un Parchemin (' + g.scrolls + ' en réserve).');
+    }
+}
+
+/**
+ * Spend a Parchemin to bring a fallen adventurer back on their feet, from
+ * anywhere in the dungeon — this is what the team hoards them for.
+ */
+function doUseScroll(room, char, payload) {
+    const g = room.game;
+    if (!g.itemsEnabled) return { ok: false, error: 'no-items' };
+    if (g.scrolls <= 0) return { ok: false, error: 'no-scroll' };
+    const target = getChar(g, payload.targetId);
+    if (!target || target.dead) return { ok: false, error: 'bad-target' };
+    if (target.conscious) return { ok: false, error: 'target-conscious' };
+    g.scrolls--;
+    healChar(room, target, 1);
+    pushLog(room, '📜 Un Parchemin est lu : ' + target.name + ' revient à lui ! (' +
+        g.scrolls + ' restant(s))');
+    pushFx(room, { kind: 'scroll-used', charId: target.id, name: target.name });
+    return { ok: true };
 }
 
 function healChar(room, char, amount) {
@@ -379,11 +517,20 @@ function applyAction(room, userId, action, payload) {
     const g = room.game;
     if (!g || g.status !== GAME_STATUS.PLAYING) return { ok: false, error: 'game-over' };
 
+    payload = payload || {};
+
+    // A Parchemin belongs to the whole team and the prompt to spend one fires
+    // when somebody drops — which can happen outside your own turn. So it is
+    // deliberately not gated on being the active player.
+    if (action === 'use-scroll') {
+        const res = doUseScroll(room, null, payload);
+        if (res.ok) checkGameEnd(room);
+        return res;
+    }
+
     const c = getChar(g, g.activeId);
     if (!c) return { ok: false, error: 'no-active' };
     if (c.ownerId !== userId) return { ok: false, error: 'not-your-turn' };
-
-    payload = payload || {};
 
     // While a tile placement is pending, only placement actions are allowed.
     if (g.pending) {
@@ -500,6 +647,10 @@ function enterTile(room, char, tile, opts = {}) {
         applyDamage(room, char, dmg);
         pushLog(room, '🔥 ' + char.name + ' traverse les flammes et perd ' + dmg + ' PV.');
     }
+
+    // Whatever was lying on the tile is picked up last, so a Potion can undo the
+    // damage the tile just dealt.
+    takeTileItem(room, char, tile);
 }
 
 function doMove(room, char, payload, opts = {}) {
@@ -667,6 +818,8 @@ function confirmPlacement(room, char, payload) {
         g.poisonedCells.push(Utils.cellKey(p.nr, p.nc));
     }
 
+    maybeDropPotion(room, tile);
+
     if (source === 'reserve') g.reserveTile = newReserve;
 
     spendAp(g, p.cost);
@@ -801,6 +954,7 @@ function doExtinguish(room, char, payload, forcedCost) {
     spendAp(g, cost);
     target.state = 'normal';
     pushLog(room, '🧯 ' + char.name + ' éteint un incendie.');
+    grantScroll(room, SCROLL_ON_FIRE, 'Sous les cendres, ' + char.name + ' déniche quelque chose');
     return { ok: true };
 }
 
@@ -917,6 +1071,7 @@ function doAbility(room, char, payload) {
             g.dragons = g.dragons.filter(dr => dr.id !== dragon.id);
             pushLog(room, '⚔️ ' + char.name + ' terrasse un Dragon adjacent !');
             pushFx(room, { kind: 'dragon-slain', row: dragon.row, col: dragon.col, by: char.name });
+            grantScroll(room, SCROLL_ON_DRAGON, 'Le Dragon abattu gardait un trésor');
             return { ok: true };
         }
         case 'inspiration': {
@@ -987,6 +1142,8 @@ function doAbility(room, char, payload) {
             // draw from the misfortune pile: the rulebook says "Résolvez
             // immédiatement un événement Éboulement", it never spends a Danger
             // card, so the doom clock is untouched.
+            // The blast can also uncover a Parchemin, right where he stands.
+            grantScroll(room, SCROLL_ON_FIREBALL, 'L\'explosion met au jour une niche murée');
             resolveFire(room);
             checkGameEnd(room);
             return { ok: true };
@@ -1082,6 +1239,7 @@ function knockOutCharsOnCell(room, row, col) {
             c.conscious = false;
             c.hidden = false;
             pushLog(room, '🐉 ' + c.name + ' est terrassé par un Dragon !');
+            offerScroll(room, c);
         }
     }
 }
@@ -1442,6 +1600,8 @@ function buildState(room) {
         suddenDeath: g.suddenDeath,
         currentEvent: g.currentEvent,
         lockpickKits: g.lockpickKits,
+        itemsEnabled: !!g.itemsEnabled,
+        scrolls: g.scrolls || 0,
         deckLeft: g.deck.length,
         reserveTile: g.reserveTile ? { kind: g.reserveTile.kind, shape: g.reserveTile.shape } : null,
         pending: serializePending(g),
@@ -1460,6 +1620,9 @@ module.exports = {
     addSelection,
     removeSelection,
     setDifficulty,
+    setItemsEnabled,
+    getDifficultyInfo,
+    DIFFICULTIES,
     getCanStartGame,
     canControlMultiple,
     initGame,

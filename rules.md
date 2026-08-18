@@ -51,7 +51,9 @@ Le **Donjon** comporte un maximu de 3 **Dragons**.
 
 3. Les 64 tuiles **Donjon** sont mélangées au hasard et forment une pioche d'exploration. La tuile **Sortie** est mélangée parmi les 5 dernières tuiles de cette pioche.
 
-4. Choisir un niveau de difficulté : **Normal**, **Avancé** ou **Expert**. Le nombre d'**Événements fâcheux** dépend de cette difficulté.
+4. Choisir un niveau de difficulté : **Facile**, **Normal**, **Avancé** ou **Expert**. Le nombre d'**Événements fâcheux** dépend de cette difficulté.
+
+Le mode **Facile** est un aménagement maison, en dehors des règles de base : la pioche d'exploration est réduite à **40 tuiles** (la **Sortie** reste mélangée parmi les 5 dernières), chaque **aventurier** démarre avec **1 point de vie supplémentaire**, et la pioche d'**Événements fâcheux** compte **3 cartes de plus** qu'en **Normal**.
 
 5. Mélanger les **Événements fâcheux** restants en fonction du tableau suivant : 
 
@@ -60,6 +62,8 @@ Le **Donjon** comporte un maximu de 3 **Dragons**.
 | 4 personnages | 22 événements fâcheux | 20 événements fâcheux | 18 événements fâcheux |
 | 5 personnages | 19 événements fâcheux | 17 événements fâcheux | 15 événements fâcheux | 
 | 6 personnages | 17 événements fâcheux | 15 événements fâcheux | 13 événements fâcheux |
+
+En difficulté **Facile** : 25 événements à 4 personnages, 22 à 5 personnages, 20 à 6 personnages.
 
 Les **Événements fâcheux** restants sont écartés de la partie.
 
@@ -259,6 +263,33 @@ Ces tuiles sont placées avec la flèche dans la direction opposée à la tuile 
 
 ## Tuiles Plaque piégée (x3)
 Lorsqu'un aventurier entre sur cette tuile, il doit immédiatement réussir un **jet de talent** pour ne pas perdre 1 point de vie.
+
+# Objets (variante optionnelle)
+
+Une case à cocher, dans le choix de la difficulté, ajoute des **objets** dans le **Donjon**. Cette variante est disponible à toutes les difficultés **sauf Expert**.
+
+## Potions
+Chaque fois qu'une tuile est révélée par une action **Découvrir** ou **Explorer**, elle a **1 chance sur 6** d'abriter une **Potion**.
+
+Le premier **aventurier** à entrer sur la tuile la boit et récupère immédiatement **1 point de vie**. Un aventurier déjà au maximum de ses points de vie la laisse sur place pour quelqu'un d'autre.
+
+## Parchemins
+Les **Parchemins** ne se trouvent pas dans les tuiles : ils apparaissent quand l'équipe nettoie le **Donjon**.
+
+* En terrassant un **Dragon** : **1 chance sur 2**.
+* En éteignant un **Incendie** : **1 chance sur 3**.
+* Quand le **Pyromancien** perce une paroi avec une **Boule de feu** : **1 chance sur 3**, sur sa propre tuile.
+
+Les **Parchemins** sont mis en commun dans la réserve de l'équipe et se conservent jusqu'à leur utilisation.
+
+Lire un **Parchemin** relève immédiatement un **aventurier inconscient** à **1 point de vie**, où qu'il se trouve dans le **Donjon**. Cela ne coûte **aucun point d'action**.
+
+Deux façons de s'en servir :
+
+1. **Au moment où un aventurier tombe inconscient**, si l'équipe possède au moins un **Parchemin**, une fenêtre propose de l'utiliser tout de suite sur lui.
+2. **Plus tard**, si l'on a refusé : le **Parchemin** reste en réserve. Il sera reproposé au prochain **aventurier** qui tombera, et l'on peut aussi cliquer à tout moment sur le compteur de **Parchemins** dans les ressources de l'équipe — une fenêtre demande alors **quel aventurier inconscient** doit être relevé.
+
+Un **Parchemin** ne peut cibler qu'un **aventurier inconscient** : il est sans effet sur un aventurier conscient, et ne ramène pas un aventurier dévoré pendant la **mort subite**.
 
 ## Boules de feu (x3)
 Le **Pyromancien** a la capacité d'utiliser jusqu'à 3 **boules de feu** afin de créer une ouverture vers une tuile adjacente, permettant de connecter 2 tuiles entre elles. Si la paroie sur laquelle une **boule de feu** est utilisée sans tuile adjacente, il sera possible d'**explorer** ou de **découvrir** une nouvelle tuile et de la placer à cet emplacement. L'ouverture créée ainsi reste disponible jusqu'à la fin de la partie.

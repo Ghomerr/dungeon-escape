@@ -289,3 +289,85 @@ l'étape 5 de la mise en place. »
 C'est la réponse des auteurs eux-mêmes au problème. Mesurée ici (§6), elle reste
 très insuffisante : +6 tours ne fait passer que de 3 % à 4 %. Le levier utile
 demeure la profondeur de la Sortie.
+
+---
+
+## 8. Récapitulatif après le mode Facile et les objets (2026-08-18)
+
+**8 400 parties** — 400 par ligne, personnages tirés au hasard parmi les 8, un
+seul joueur contrôlant toute l'équipe. Reproductible avec :
+
+```bash
+$NODE tools/sim/matrix.js 400        # ou --md pour cette table
+```
+
+| Difficulté | Objets | Persos | Victoires | Or | Argent | Bronze | Sortis (moy.) | Sortis si victoire | Tours (moy.) | Tours si victoire | Sortie trouvée |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Facile | non | 4 | **24,5 %** | 9 | 27 | 62 | 1,06 | 2,46 | 24,6 | 26,9 | 80,8 % |
+| Facile | non | 5 | **21,5 %** | 6 | 30 | 50 | 1,48 | 3,49 | 23,4 | 23,8 | 89,3 % |
+| Facile | non | 6 | **18,0 %** | 18 | 23 | 31 | 2,06 | 4,82 | 22,3 | 20,8 | 93,3 % |
+| Facile | **oui** | 4 | **39,0 %** | 23 | 53 | 80 | 1,43 | 2,63 | 25,5 | 26,5 | 86,3 % |
+| Facile | **oui** | 5 | **33,0 %** | 30 | 56 | 46 | 1,99 | 3,88 | 23,4 | 23,1 | 93,5 % |
+| Facile | **oui** | 6 | **30,5 %** | 28 | 48 | 46 | 2,56 | 4,85 | 22,4 | 20,7 | 95,8 % |
+| Normal | non | 4 | 2,8 % | 0 | 1 | 10 | 0,27 | 2,09 | 19,8 | 25,4 | 24,8 % |
+| Normal | non | 5 | 0,8 % | 0 | 1 | 2 | 0,38 | 3,33 | 19,5 | 24,0 | 34,8 % |
+| Normal | non | 6 | 0,8 % | 0 | 1 | 2 | 0,53 | 4,33 | 18,9 | 19,3 | 46,0 % |
+| Normal | **oui** | 4 | 5,0 % | 1 | 3 | 16 | 0,46 | 2,25 | 21,4 | 24,4 | 40,5 % |
+| Normal | **oui** | 5 | 2,0 % | 0 | 3 | 5 | 0,64 | 3,38 | 20,6 | 21,8 | 54,0 % |
+| Normal | **oui** | 6 | 1,5 % | 0 | 0 | 6 | 0,84 | 4,00 | 19,8 | 19,3 | 65,5 % |
+| Avancé | non | 4 | 1,5 % | 0 | 1 | 5 | 0,17 | 2,17 | 17,4 | 22,5 | 15,3 % |
+| Avancé | non | 5 | 0,3 % | 0 | 0 | 1 | 0,26 | 3,00 | 17,0 | 18,0 | 24,3 % |
+| Avancé | non | 6 | 0,3 % | 0 | 0 | 1 | 0,38 | 4,00 | 16,7 | 18,0 | 33,8 % |
+| Avancé | **oui** | 4 | 2,3 % | 0 | 2 | 7 | 0,32 | 2,22 | 19,4 | 21,8 | 29,8 % |
+| Avancé | **oui** | 5 | 0,5 % | 0 | 0 | 2 | 0,44 | 3,00 | 18,2 | 19,5 | 39,0 % |
+| Avancé | **oui** | 6 | 0,5 % | 0 | 0 | 2 | 0,66 | 4,00 | 17,6 | 16,0 | 52,5 % |
+| Expert | — | 4 | 0,3 % | 0 | 0 | 1 | 0,09 | 2,00 | 16,0 | 20,0 | 9,3 % |
+| Expert | — | 5 | 0,0 % | 0 | 0 | 0 | 0,14 | — | 15,8 | — | 14,5 % |
+| Expert | — | 6 | 0,0 % | 0 | 0 | 0 | 0,34 | — | 15,1 | — | 30,3 % |
+
+*(Expert interdit les objets, la ligne « oui » n'existe donc pas.)*
+
+### Le mode Facile marche, et c'est bien la pioche qui pilote tout
+
+À 4 personnages, on passe de **2,8 % à 24,5 %** — presque dix fois plus. Le taux
+de découverte de la **Sortie** explose de 25 % à 81 % : c'est bien le nombre de
+tuiles à piocher, et lui seul, qui décidait des parties (cf. §2 et §6).
+
+### Les objets valent à peu près un demi-cran de difficulté
+
+Ils multiplient le taux de victoire par **1,6 à 1,8** partout où ils sont
+autorisés :
+
+| Difficulté (4 persos) | sans objets | avec objets |
+| --- | ---: | ---: |
+| Facile | 24,5 % | **39,0 %** |
+| Normal | 2,8 % | **5,0 %** |
+| Avancé | 1,5 % | **2,3 %** |
+
+Ramassé par partie : **3,6 à 5,2 potions** et **0,6 à 0,8 parchemin lu**. Les
+potions font le gros du travail (≈ 4 PV rendus gratuitement, soit un tiers de la
+réserve de vie d'une équipe de 4) ; les parchemins sont rares mais chacun rachète
+les tours restants d'un aventurier tombé.
+
+Effet secondaire notable : avec les objets, les parties **durent plus longtemps**
+(19,8 → 21,4 tours en Normal), signe que l'équipe tient debout au lieu de
+s'effondrer à mi-parcours.
+
+### Le rang reste dur à monter
+
+Même en Facile avec objets, la victoire moyenne se joue à **2,6 aventuriers
+sortis sur 4** : l'essentiel des victoires sont des **Bronze**, et l'**Or** reste
+un exploit (23 sur 400 parties, soit 5,8 %). Le rang dépend d'un regroupement
+final que le bot ne planifie pas — un joueur humain devrait faire nettement
+mieux sur ce point précis.
+
+### Jouer à 5 ou 6 reste pénalisant
+
+Le constat du §1 tient à toutes les difficultés : plus de personnages donne plus
+de points d'action, mais moins de tours et un seuil de rang inchangé (au plus
+2 abandonnés). À 6, il faut en sortir 4.
+
+> Rappel de méthode : ces chiffres sont un **plancher**. Le bot n'utilise ni le
+> Sacrifice du Paladin, ni l'Inspiration du Barde, ni la Boule de feu, et ne
+> planifie pas le regroupement final. Les comparaisons entre lignes sont fiables ;
+> les valeurs absolues sous-estiment un joueur expérimenté.

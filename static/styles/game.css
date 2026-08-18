@@ -373,6 +373,15 @@ body.in-game { height: 100dvh; overflow: hidden; }
     text-shadow: 0 1px 0 #000, 0 -1px 0 #000, 1px 0 0 #000, -1px 0 0 #000;
 }
 
+/* Loot lying on a tile, waiting for the first adventurer to reach it. */
+.tile-item {
+    position: absolute; right: 3px; bottom: 3px; z-index: 5;
+    font-size: 1rem; line-height: 1; pointer-events: none;
+    filter: drop-shadow(0 0 3px #000) drop-shadow(0 0 6px #ffd75e88);
+    animation: item-bob 1.8s ease-in-out infinite;
+}
+@keyframes item-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
 /* bad-event layer: coloured veil + glow, on top of the image */
 .state-fx { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
 .state-fx.fx-fire {
@@ -817,6 +826,8 @@ body.in-game #game-emoji-bar.open {
 /* choice dialog */
 .choice-list { display: flex; flex-direction: column; gap: 6px; }
 .choice-btn { width: 100%; text-align: left; padding: 9px 12px; display: flex; align-items: center; gap: 9px; }
+/* Secondary line inside a choice button (e.g. why this target is eligible). */
+.choice-sub { margin-left: auto; font-size: .74rem; color: var(--muted); font-weight: normal; }
 
 /* placement dialog */
 .placement-content .hint { margin: 0 0 8px; }
@@ -838,6 +849,15 @@ body.in-game #game-emoji-bar.open {
 /* Resource icons (kits / deck / fireballs) */
 .res-ico { text-align: center; color: var(--gold); }
 #fireball-res .res-ico { color: #ff6a3d; }
+#scroll-res .res-ico { color: #e8c66a; }
+/* The Parchemin counter is a button in disguise: it lights up only while a
+   fallen adventurer could actually be woken up. */
+.res-usable { cursor: pointer; }
+.res-usable.res-ready {
+    background: #3a3416; border-radius: 6px;
+    box-shadow: 0 0 0 1px #c9a227, 0 0 9px #c9a22766;
+}
+.res-usable.res-ready .res-ico { color: #ffd75e; }
 
 /* ---- Heal / damage floating feedback over a party card ---- */
 .hp-fx {

@@ -34,7 +34,11 @@ function entryCost(char, tile) {
     if (tile.state === 'poisoned') cost += 4;
     // A trapped plate is a 50% chance of losing 1 HP.
     if (tile.kind === 'trap') cost += 1;
-    return cost;
+    // A Potion is worth 2 AP (the price of healing that point by hand), but
+    // only to somebody who can actually drink it.
+    if (tile.item === 'potion' && char.hp < char.maxHp) cost -= 1.5;
+    else if (tile.item === 'scroll') cost -= 1;
+    return Math.max(0.1, cost);
 }
 
 /** The engine action that performs that step. */
@@ -212,6 +216,13 @@ function decide(room, char, opts) {
     if (char.escaped) {
         const rescue = opts.rescue !== false ? planRescue(g, char, ap, free) : null;
         return rescue || { action: 'end-turn' };
+    }
+
+    // --- 0. A Parchemin costs no action point and buys back a whole
+    // adventurer's worth of turns: never sit on one while somebody is down.
+    if (g.itemsEnabled && g.scrolls > 0) {
+        const downedAnywhere = g.characters.find(c => !c.conscious && !c.dead && !c.escaped);
+        if (downedAnywhere) return { action: 'use-scroll', payload: { targetId: downedAnywhere.id } };
     }
 
     // --- 1. Paladin: kill an adjacent dragon (cheap and permanent) ----------

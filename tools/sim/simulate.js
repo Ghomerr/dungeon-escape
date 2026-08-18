@@ -40,7 +40,7 @@ function mulberry32(a) {
 
 function parseArgs(argv) {
     const out = {
-        games: 100, chars: [4, 5, 6], difficulty: 'normal', style: 'explore',
+        games: 100, chars: [4, 5, 6], difficulty: 'normal', style: 'explore', items: false,
         effort: 'safe', selfHeal: true, seed: 1, json: null, roster: 'random', tweak: null
     };
     for (let i = 2; i < argv.length; i++) {
@@ -54,6 +54,7 @@ function parseArgs(argv) {
         else if (a === '--seed') out.seed = parseInt(next(), 10);
         else if (a === '--roster') out.roster = next();
         else if (a === '--tweak') out.tweak = next();
+        else if (a === '--items') out.items = true;
         else if (a === '--json') out.json = next();
     }
     return out;
@@ -161,7 +162,8 @@ function playOne(nChars, opts, seed) {
     const room = {
         users: [{ id: 'BOT', isRobot: false }],
         selectedCharacters: roster.map(id => ({ charId: id, ownerId: 'BOT' })),
-        difficulty: opts.difficulty
+        difficulty: opts.difficulty,
+        itemsEnabled: !!opts.items && opts.difficulty !== 'expert'
     };
     Game.initGame(room);
     const g = room.game;
@@ -222,6 +224,9 @@ function playOne(nChars, opts, seed) {
         tilesPlaced, deckLeft: g.deck.length,
         eventsResolved: g.eventsResolved, eventsTotal: g.eventsTotal,
         suddenDeath: g.suddenDeath,
+        potionsDrunk: log.filter(l => /boit une Potion/.test(l)).length,
+        scrollsFound: g.scrollsFound || 0,
+        scrollsUsed: log.filter(l => /Un Parchemin est lu/.test(l)).length,
         knockouts: log.filter(l => /tombe inconscient/.test(l)).length,
         revives: log.filter(l => /reprend connaissance/.test(l)).length,
         dragonsSpawned: log.filter(l => /Un Dragon surgit/.test(l)).length,

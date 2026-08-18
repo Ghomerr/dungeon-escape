@@ -253,6 +253,50 @@ async function run() {
         await sleep(500);
         await shoot(cdp, '01-waiting-room');
 
+        // Difficulty panel: the blurb must state real numbers, and the items
+        // variant must lock itself out of Expert.
+        const diffPanel = await cdp.eval(`
+            (() => {
+                const read = () => ({
+                    facts: [...document.querySelectorAll('#wr-difficulty-facts li')].map(li => li.textContent.trim()),
+                    itemsDisabled: document.querySelector('#wr-items').disabled
+                });
+                return new Promise(resolve => {
+                    const out = { buttons: [...document.querySelectorAll('.diff-btn')].map(b => b.textContent.trim()) };
+                    out.normal = read();
+                    $('.diff-btn[data-diff="easy"]').click();
+                    setTimeout(() => {
+                        out.easy = read();
+                        $('.diff-btn[data-diff="expert"]').click();
+                        setTimeout(() => {
+                            out.expert = read();
+                            $('.diff-btn[data-diff="normal"]').click();
+                            setTimeout(() => resolve(out), 250);
+                        }, 250);
+                    }, 250);
+                });
+            })()`);
+        if (diffPanel) {
+            log('  · difficulties: ' + JSON.stringify(diffPanel.buttons));
+            log('  · facile: ' + JSON.stringify(diffPanel.easy.facts));
+            if (!diffPanel.buttons.includes('Facile')) {
+                problems.push({ kind: 'lobby', text: 'no "Facile" difficulty button' });
+            }
+            if (!diffPanel.normal.facts.length) {
+                problems.push({ kind: 'lobby', text: 'the difficulty panel lists no concrete facts' });
+            }
+            if (!diffPanel.easy.facts.some(f => /40 tuiles/.test(f)) ||
+                !diffPanel.easy.facts.some(f => /\+1 PV/.test(f))) {
+                problems.push({ kind: 'lobby', text: 'Facile does not advertise its 40 tiles / +1 HP: ' + JSON.stringify(diffPanel.easy.facts) });
+            }
+            if (!diffPanel.expert.itemsDisabled) {
+                problems.push({ kind: 'rules', text: 'the items checkbox stays enabled in Expert' });
+            }
+            if (diffPanel.normal.itemsDisabled) {
+                problems.push({ kind: 'lobby', text: 'the items checkbox is disabled in Normal' });
+            }
+        }
+
         // A single human may control several adventurers, so one player is enough.
         log('· picking 4 adventurers');
         await cdp.eval(`
@@ -457,6 +501,61 @@ async function run() {
                 problems.push({ kind: 'rules', text: 'no "Réapparaître" button while in the shadows' });
             }
         }
+        //  (a2) Items variant: the Parchemin counter appears, and only lights up
+        //       when somebody is actually down to be woken.
+        const itemsUi = await cdp.eval(`
+            (() => {
+                const st = Game.state;
+                const wasItems = st.itemsEnabled, wasScrolls = st.scrolls;
+                const victim = st.characters.find(c => c.id !== st.activeId);
+                const wasConscious = victim.conscious;
+                st.itemsEnabled = true; st.scrolls = 2;
+                render(st);
+                const el = document.querySelector('#scroll-res');
+                const out = {
+                    shown: !!(el && el.offsetParent),
+                    count: (document.querySelector('#scroll-count') || {}).textContent,
+                    readyWithNobodyDown: !!(el && el.classList.contains('res-ready'))
+                };
+                victim.conscious = false;
+                render(st);
+                out.readyWithSomeoneDown = !!(document.querySelector('#scroll-res') || {}).classList.contains('res-ready');
+                // Clicking the counter must ALWAYS ask which fallen adventurer
+                // to raise — even when only one is down.
+                document.querySelector('#scroll-res').click();
+                out.pickerOpen = !!document.querySelector('#choice-dialog').offsetParent;
+                out.pickerTitle = ($('#choice-dialog').dialog('option', 'title') || '');
+                out.pickerChoices = [...document.querySelectorAll('#choice-dialog .choice-btn')]
+                    .map(b => b.textContent.trim());
+                $('#choice-dialog').dialog('close');
+                victim.conscious = wasConscious;
+                st.itemsEnabled = wasItems; st.scrolls = wasScrolls;
+                render(st);
+                out.hiddenWhenOff = !document.querySelector('#scroll-res').offsetParent;
+                return out;
+            })()`);
+        if (itemsUi) {
+            log('  · items UI: ' + JSON.stringify(itemsUi));
+            if (!itemsUi.shown || itemsUi.count !== '2') {
+                problems.push({ kind: 'layout', text: 'the Parchemin counter does not show its stock' });
+            }
+            if (itemsUi.readyWithNobodyDown) {
+                problems.push({ kind: 'layout', text: 'the Parchemin counter lights up with nobody down' });
+            }
+            if (!itemsUi.readyWithSomeoneDown) {
+                problems.push({ kind: 'layout', text: 'the Parchemin counter stays dim while an adventurer is down' });
+            }
+            if (!itemsUi.hiddenWhenOff) {
+                problems.push({ kind: 'layout', text: 'the Parchemin counter shows even with items disabled' });
+            }
+            if (!itemsUi.pickerOpen || itemsUi.pickerChoices.length !== 1) {
+                problems.push({ kind: 'rules', text: 'clicking the Parchemin counter does not ask which adventurer to raise: ' + JSON.stringify(itemsUi.pickerChoices) });
+            }
+            if (!/parchemin/i.test(itemsUi.pickerTitle)) {
+                problems.push({ kind: 'layout', text: 'the Parchemin picker has an unexpected title: ' + itemsUi.pickerTitle });
+            }
+        }
+
         //  (b) An adventurer standing on the Exit stays ON the board (still in
         //      play), flagged as safe.
         const exitUi = await cdp.eval(`

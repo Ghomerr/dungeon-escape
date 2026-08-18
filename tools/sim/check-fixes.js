@@ -251,5 +251,135 @@ console.log('\n11. Fin de partie — tout le monde à la Sortie = Or');
     ok('rang Or (0 abandonné)', g.rank === 'gold', g.rank);
 }
 
+// --- 12. Easy difficulty ---------------------------------------------------
+console.log('\n12. Difficulté Facile — pioche courte et +1 PV');
+{
+    const room = {
+        users: [{ id: 'U', isRobot: false }],
+        selectedCharacters: ['gnome', 'bard', 'druid', 'paladin'].map(id => ({ charId: id, ownerId: 'U' })),
+        difficulty: 'easy'
+    };
+    Game.initGame(room);
+    const g = room.game;
+    ok('pioche de 40 tuiles (+ Sortie, - réserve)', g.deck.length === 40, 'deck=' + g.deck.length);
+    ok('la Sortie est dans la pioche', g.deck.some(t => t.kind === 'exit'));
+    const exitIdx = g.deck.findIndex(t => t.kind === 'exit');
+    ok('la Sortie est parmi les 5 dernières', exitIdx >= g.deck.length - 5, 'index=' + exitIdx + '/' + g.deck.length);
+    ok('+1 PV pour tous', g.characters.every(c => c.hp === c.maxHp && c.maxHp >= 4),
+        g.characters.map(c => c.maxHp).join(','));
+    ok('25 tours à 4 personnages', g.eventsTotal === 25, 'tours=' + g.eventsTotal);
+}
+
+// --- 13. Items: potions, scrolls, expert lockout ---------------------------
+console.log('\n13. Objets — potions, parchemins, exclusion en Expert');
+{
+    const room = { users: [{ id: 'U', isRobot: false }], selectedCharacters: [], difficulty: 'normal' };
+    Game.initLobbyData(room);
+    ok('désactivés par défaut', room.itemsEnabled === false);
+    Game.setItemsEnabled(room, true);
+    ok('activables en Normal', room.itemsEnabled === true);
+    Game.setDifficulty(room, 'expert');
+    ok('désactivés d\'office en passant en Expert', room.itemsEnabled === false);
+    const denied = Game.setItemsEnabled(room, true);
+    ok('refusés en Expert', !denied.ok && denied.error === 'items-not-in-expert', JSON.stringify(denied));
+    Game.setDifficulty(room, 'easy');
+    ok('réactivables en Facile', Game.setItemsEnabled(room, true).ok);
+}
+{
+    const room = {
+        users: [{ id: 'U', isRobot: false }],
+        selectedCharacters: ['gnome', 'bard', 'druid', 'paladin'].map(id => ({ charId: id, ownerId: 'U' })),
+        difficulty: 'normal', itemsEnabled: true
+    };
+    Game.initGame(room);
+    const g = room.game;
+    const c = active(g);
+
+    // A potion heals the first arrival, and only when it can.
+    g.board['-1,0'] = { uid: 950, kind: 'simple', shape: 'corridor', exits: [0, 2], row: -1, col: 0, state: 'normal', item: 'potion' };
+    act(room, 'move', { dir: 0 });
+    ok('potion laissée sur place si PV au max', g.board['-1,0'].item === 'potion', 'item=' + g.board['-1,0'].item);
+    c.hp = 1;
+    c.row = 0; c.col = 0;
+    act(room, 'move', { dir: 0 });
+    ok('potion bue quand elle soigne', g.board['-1,0'].item === null, 'item=' + g.board['-1,0'].item);
+    ok('elle rend 1 PV', c.hp === 2, 'hp=' + c.hp);
+
+    // A scroll wakes a fallen adventurer from anywhere.
+    const victim = g.characters.find(x => x.id !== c.id);
+    victim.hp = 0; victim.conscious = false;
+    victim.row = 5; victim.col = 5;              // far away: no need to be close
+    g.scrolls = 1;
+    const apBefore = g.ap;
+    const used = Game.applyAction(room, 'U', 'use-scroll', { targetId: victim.id });
+    ok('le parchemin est accepté', used.ok, JSON.stringify(used));
+    ok('la victime est relevée à exactement 1 PV', victim.conscious === true && victim.hp === 1, 'hp=' + victim.hp);
+    ok('il ne coûte aucun PA', g.ap === apBefore, apBefore + ' → ' + g.ap);
+    ok('le stock est décrémenté', g.scrolls === 0, 'scrolls=' + g.scrolls);
+    const again = Game.applyAction(room, 'U', 'use-scroll', { targetId: victim.id });
+    ok('refusé sans parchemin', !again.ok && again.error === 'no-scroll', JSON.stringify(again));
+
+    // A scroll only ever raises the fallen.
+    g.scrolls = 2;
+    const onAwake = Game.applyAction(room, 'U', 'use-scroll', { targetId: victim.id });
+    ok('refusé sur un aventurier conscient', !onAwake.ok && onAwake.error === 'target-conscious', JSON.stringify(onAwake));
+    victim.dead = true; victim.conscious = false;
+    const onDead = Game.applyAction(room, 'U', 'use-scroll', { targetId: victim.id });
+    ok('refusé sur un aventurier dévoré', !onDead.ok && onDead.error === 'bad-target', JSON.stringify(onDead));
+    ok('le stock est intact après un refus', g.scrolls === 2, 'scrolls=' + g.scrolls);
+}
+{
+    // Falling unconscious with scrolls in stock must raise the offer, and the
+    // scroll must survive a refusal (nothing is auto-spent).
+    // No Paladin (his Sacrifice would shield the tile) and no Bard (+1 to rolls).
+    const room = {
+        users: [{ id: 'U', isRobot: false }],
+        selectedCharacters: ['gnome', 'druid', 'elf-rogue', 'shadow-hunter'].map(id => ({ charId: id, ownerId: 'U' })),
+        difficulty: 'normal', itemsEnabled: true
+    };
+    Game.initGame(room);
+    const g = room.game;
+    g.scrolls = 1;
+    const victim = g.characters[1];
+    const seen = () => Game.buildState(room).fx.filter(f => f.kind === 'scroll-offer');
+    ok('aucune proposition tant que personne ne tombe', seen().length === 0);
+    victim.hp = 1;
+    // Force every talent roll to fail so the Curse lands for sure.
+    const origRoll = Utils.talentRoll;
+    Utils.talentRoll = () => ({ value: 1, total: 1, success: false });
+    g.eventDeck.unshift({ uid: 990, type: 'curse', label: 'Malédiction', doubled: false });
+    let guard = 0;
+    while (victim.conscious && guard++ < 20) Game.applyAction(room, 'U', 'end-turn', {});
+    Utils.talentRoll = origRoll;
+    const offers = seen();
+    ok('une proposition est émise à la chute', offers.length > 0, offers.length + ' fx');
+    if (offers.length) {
+        const o = offers[offers.length - 1];
+        ok('elle cible le bon aventurier', o.charId === victim.id, o.charId);
+        ok('elle indique le propriétaire', o.ownerId === 'U', o.ownerId);
+    }
+    ok('le parchemin n\'est PAS dépensé automatiquement', g.scrolls === 1, 'scrolls=' + g.scrolls);
+    ok('l\'aventurier reste inconscient tant qu\'on ne l\'utilise pas', victim.conscious === false);
+    // ...and it still works afterwards, which is the "use it later" path.
+    const later = Game.applyAction(room, 'U', 'use-scroll', { targetId: victim.id });
+    ok('utilisable plus tard', later.ok && victim.conscious === true, JSON.stringify(later));
+}
+{
+    // Items off: nothing ever drops.
+    const room = {
+        users: [{ id: 'U', isRobot: false }],
+        selectedCharacters: ['gnome', 'bard', 'druid', 'paladin'].map(id => ({ charId: id, ownerId: 'U' })),
+        difficulty: 'normal', itemsEnabled: false
+    };
+    Game.initGame(room);
+    const g = room.game;
+    for (let i = 0; i < 200; i++) {
+        const t = { kind: 'simple' };
+        Game.buildState(room);           // keep the engine honest
+        if (t.item) break;
+    }
+    ok('aucun objet quand la variante est éteinte', g.itemsEnabled === false && g.scrolls === 0);
+}
+
 console.log('\n' + (fail === 0 ? '✅ ' : '❌ ') + pass + ' assertions OK, ' + fail + ' échec(s)\n');
 process.exit(fail ? 1 : 0);

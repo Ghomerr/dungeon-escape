@@ -87,6 +87,8 @@ function emitPlayerListChanged(room) {
         owner: room.owner,
         password: room.password,
         difficulty: room.difficulty,
+        itemsEnabled: !!room.itemsEnabled,
+        difficultyInfo: Game.getDifficultyInfo(room.difficulty, room.selectedCharacters.length),
         users: room.users.map(u => ({ id: u.id, isConnected: u.isConnected })),
         catalog: Game.getCharacterCatalog(),
         selectedCharacters: room.selectedCharacters,
@@ -248,6 +250,14 @@ io.on('connection', (Socket) => {
     Socket.on('set-difficulty', (data) => {
         requireOwner(data, (room) => {
             Game.setDifficulty(room, data.difficulty);
+            emitPlayerListChanged(room);
+        });
+    });
+
+    Socket.on('set-items-enabled', (data) => {
+        requireOwner(data, (room) => {
+            const res = Game.setItemsEnabled(room, data.enabled);
+            if (!res.ok) Socket.emit('lobby-error', { type: res.error });
             emitPlayerListChanged(room);
         });
     });

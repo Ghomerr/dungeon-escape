@@ -55,10 +55,13 @@ function buildEventDeck() {
  * Number of misfortune cards (= number of turns) per characters count and
  * difficulty, straight from the rulebook table.
  */
+// `easy` is not in the rulebook table: it is Normal plus the 3 extra cards the
+// rulebook itself suggests ("si vous trouvez que c'est toujours trop difficile,
+// vous pouvez ajouter 3 cartes à la pile Danger").
 const DIFFICULTY_TABLE = {
-    4: { normal: 22, advanced: 20, expert: 18 },
-    5: { normal: 19, advanced: 17, expert: 15 },
-    6: { normal: 17, advanced: 15, expert: 13 }
+    4: { easy: 25, normal: 22, advanced: 20, expert: 18 },
+    5: { easy: 22, normal: 19, advanced: 17, expert: 15 },
+    6: { easy: 20, normal: 17, advanced: 15, expert: 13 }
 };
 
 function getEventCount(charactersCount, difficulty) {
@@ -75,7 +78,7 @@ function buildEventDeckForGame(charactersCount, difficulty, shuffleFn) {
     let deck = buildEventDeck();
 
     // Apply difficulty exclusions.
-    if (difficulty === 'normal') {
+    if (difficulty === 'easy' || difficulty === 'normal') {
         deck = deck.filter(c => !c.doubled);
     } else if (difficulty === 'advanced') {
         deck = deck.filter(c => !c.excludeAdvanced);

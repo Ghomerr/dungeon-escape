@@ -19,6 +19,8 @@ NODE="E:/Programs/node-v26.4.0-win-x64/node.exe"
 | `simulate.js` | Lance N parties, agrège les stats, applique les *tweaks* |
 | `ablation.js` | Balayage « on enlève un élément à la fois » |
 | `rebalance.js` | Teste des correctifs candidats sur 4/5/6 personnages |
+| `matrix.js` | Récapitulatif complet : toutes les difficultés × objets on/off × 4/5/6 personnages |
+| `check-fixes.js` | Assertions sur le moteur réel, une par règle corrigée |
 | `by-character.js` | Taux de victoire selon le personnage présent dans l'équipe (lit un dump `--json`) |
 | `trace.js` | Rejoue **une** partie et affiche le journal complet + le compte des actions |
 | `check-deck.js` | Vérifie la profondeur de la tuile SORTIE dans la pioche |
@@ -40,6 +42,13 @@ $NODE tools/sim/trace.js 42 4 explore
 
 # Impact de chaque personnage
 $NODE tools/sim/by-character.js tools/sim/results-normal.json 4
+
+# Récapitulatif complet : difficultés × objets × taille d'équipe (~8400 parties)
+$NODE tools/sim/matrix.js 400
+$NODE tools/sim/matrix.js 400 --md      # même table, en Markdown pour le rapport
+
+# Non-régression des règles corrigées (56 assertions sur le moteur réel)
+$NODE tools/sim/check-fixes.js
 ```
 
 ## Options de `simulate.js`
@@ -48,7 +57,8 @@ $NODE tools/sim/by-character.js tools/sim/results-normal.json 4
 | --- | --- | --- |
 | `--games` | entier | 100 |
 | `--chars` | `4,5,6` | `4,5,6` |
-| `--difficulty` | `normal` / `advanced` / `expert` | `normal` |
+| `--difficulty` | `easy` / `normal` / `advanced` / `expert` | `normal` |
+| `--items` | active la variante Potions & Parchemins (ignorée en `expert`) | désactivée |
 | `--style` | `explore` (dispersion) / `discover` (sans bouger) / `pairs` (binômes) | `explore` |
 | `--effort` | `never` / `safe` (PV pleins) / `always` | `safe` |
 | `--no-selfheal` | — | auto-soin actif |

@@ -348,6 +348,10 @@ Socket.on('game-error', (data) => {
         'in-shadow': 'Cet aventurier est dans l\'ombre : il ne peut que réapparaître.',
         'not-in-shadow': 'Cet aventurier n\'est pas dans l\'ombre.',
         'already-in-shadow': 'Cet aventurier est déjà dans l\'ombre.',
+        'no-items': 'Les objets ne sont pas activés dans cette partie.',
+        'no-scroll': 'Plus aucun Parchemin en réserve.',
+        'target-conscious': 'Cet aventurier est déjà conscient.',
+        'items-not-in-expert': 'Les objets ne sont pas disponibles en difficulté Expert.',
         'already-open': 'Ce côté est déjà ouvert : vous pouvez y découvrir une tuile directement.',
         'inspiration-used': 'Inspiration déjà utilisée ce tour-ci.',
         'run-move-only': 'Pendant une course / célérité, seul le déplacement est possible.',
@@ -862,6 +866,42 @@ function processFx(state) {
 
 function playFx(fx) {
     switch (fx.kind) {
+        case 'potion':
+            showBigToast({
+                color: '#2c5e3a', iconHtml: '<span class="toast-icon">🧪</span>',
+                label: escapeHtml(fx.name) + ' boit une Potion',
+                sub: '+1 point de vie', ms: 2200
+            });
+            break;
+        case 'scroll-found':
+            showBigToast({
+                color: '#5a4a14', iconHtml: '<span class="toast-icon">📜</span>',
+                label: 'Un Parchemin est trouvé !',
+                sub: escapeHtml(fx.reason) + ' — ' + fx.total + ' en réserve', ms: 2600
+            });
+            break;
+        case 'scroll-used':
+            showBigToast({
+                color: '#2c5e3a', iconHtml: '<span class="toast-icon">📜</span>',
+                label: escapeHtml(fx.name) + ' revient à lui !',
+                sub: 'Un Parchemin a été lu', ms: 2600
+            });
+            break;
+        case 'scroll-offer': {
+            // Somebody just dropped and the team holds Parchemins. Only the
+            // player controlling the fallen adventurer is asked.
+            if (fx.ownerId && fx.ownerId !== Player.id) break;
+            const target = (Game.state.characters || []).find(c => c.id === fx.charId);
+            if (!target || target.conscious || target.dead) break;
+            Dialog.openTwoChoicesDialog($('#simple-dialog'), '📜 Un Parchemin peut le sauver',
+                '<b>' + escapeHtml(fx.name) + '</b> vient de tomber inconscient.<br>' +
+                'Lire un Parchemin pour le réveiller immédiatement ?<br>' +
+                '<span class="hint">' + fx.scrolls + ' Parchemin(s) en réserve. Vous pourrez aussi le faire ' +
+                'plus tard depuis la barre des ressources.</span>',
+                '<i class="fas fa-scroll"></i> Utiliser', () => sendAction('use-scroll', { targetId: fx.charId }),
+                'Garder', null);
+            break;
+        }
         case 'hide':
             showBigToast(fx.success ? {
                 // 🙈 rather than 🫥 : the latter is a blank box on Windows 10.
@@ -986,6 +1026,7 @@ function render(state) {
     $('#kit-count').text(state.lockpickKits);
     $('#deck-count').text(state.deckLeft);
     renderFireballs(state);
+    renderScrolls(state);
     spawnHpFx(state);
     processFx(state);
     maybeStartTutorial();
@@ -1003,6 +1044,44 @@ function renderFireballs(state) {
     const left = Math.max(0, FIREBALL_USES - ((pyro.uses && pyro.uses.fireball) || 0));
     $('#fireball-count').text(left);
     $('#fireball-res').css('display', '');
+}
+
+// Parchemin stock (items variant). Clicking it wakes a fallen adventurer, so it
+// is only enabled while somebody is actually down.
+function renderScrolls(state) {
+    const $res = $('#scroll-res');
+    if (!state.itemsEnabled) { $res.hide(); return; }
+    const downed = state.characters.filter(c => !c.conscious && !c.dead);
+    const usable = state.scrolls > 0 && downed.length > 0;
+    $('#scroll-count').text(state.scrolls);
+    $res.css('display', '').toggleClass('res-ready', usable);
+    $res.off('click').on('click', () => {
+        if (!state.scrolls) {
+            Dialog.openSimpleDialog($('#simple-dialog'), 'Aucun parchemin',
+                'Votre équipe n\'a aucun Parchemin en réserve.');
+            return;
+        }
+        if (!downed.length) {
+            Dialog.openSimpleDialog($('#simple-dialog'), 'Personne à réveiller',
+                'Un Parchemin ne sert qu\'à réveiller un aventurier inconscient. Gardez-le pour plus tard !');
+            return;
+        }
+        openScrollTargetDialog(downed, state.scrolls);
+    });
+}
+
+/**
+ * Which fallen adventurer does the Parchemin bring back? The question is always
+ * asked, even with a single candidate: burning a scroll is never an accident,
+ * and the list is where the player sees who is still down.
+ */
+function openScrollTargetDialog(downed, stock) {
+    const items = downed.map(c => ({
+        label: '<i class="fas fa-star-of-life"></i> <b>' + escapeHtml(c.name) + '</b>' +
+            '<span class="choice-sub">inconscient — repartira avec 1 PV</span>',
+        fn: () => sendAction('use-scroll', { targetId: c.id })
+    }));
+    openMenu('📜 Lire un Parchemin (' + stock + ' en réserve)', items);
 }
 
 /**
@@ -1433,6 +1512,13 @@ function renderBoard(state) {
         // Dice values (flammable): HTML overlay, always upright and legible.
         if (t.kind === 'flammable' && t.fireValues) {
             $tile.append('<div class="fire-values">' + t.fireValues.join('·') + '</div>');
+        }
+
+        // Loot waiting to be picked up (items variant).
+        if (t.item === 'potion') {
+            $tile.append('<div class="tile-item item-potion" title="Potion : +1 PV pour le premier aventurier qui arrive">🧪</div>');
+        } else if (t.item === 'scroll') {
+            $tile.append('<div class="tile-item item-scroll" title="Parchemin à ramasser">📜</div>');
         }
 
         state.dragons.filter(d => d.row === t.row && d.col === t.col).forEach(d => {
@@ -1893,6 +1979,20 @@ const TUTO_STEPS = [
         html: '<p>🔑 Les <b>kits de crochetage</b> (6 pour toute la partie), 🃏 les tuiles restant dans la <b>pioche</b>, ' +
             'et 🔥 les <b>boules de feu</b> du Pyromancien s\'il est de la partie.</p>' +
             '<p>Ces ressources sont communes : parlez-vous avant de les gaspiller !</p>'
+    },
+    {
+        // Hidden when the items variant is off, so this step skips itself.
+        sel: '#scroll-res',
+        title: 'Potions et Parchemins',
+        html: '<p>Cette partie se joue avec les <b>objets</b> !</p>' +
+            '<ul><li>🧪 Une <b>Potion</b> se cache dans une tuile sur six. Le premier aventurier qui arrive ' +
+            'dessus la boit et récupère <b>1 PV</b> — s\'il est déjà au maximum, il la laisse aux autres.</li>' +
+            '<li>📜 Un <b>Parchemin</b> se gagne en nettoyant le Donjon : terrasser un Dragon (1 fois sur 2), ' +
+            'éteindre un incendie (1 sur 3) ou percer une paroi à la Boule de feu (1 sur 3).</li></ul>' +
+            '<p>Lire un Parchemin <b>réveille un aventurier inconscient</b>, où qu\'il soit dans le Donjon, ' +
+            'et <b>sans dépenser le moindre PA</b>.</p>' +
+            '<p>Quand quelqu\'un tombe, le jeu te propose d\'en lire un tout de suite. Si tu refuses, il reste ' +
+            'en réserve : <b>clique sur ce compteur</b> plus tard pour choisir qui relever.</p>'
     },
     {
         sel: '#journal-btn',

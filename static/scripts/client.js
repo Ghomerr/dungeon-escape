@@ -17,10 +17,33 @@ function portraitCardUrl(id) { return 'static/assets/adventurers/' + id + '_port
 
 // Short explanation of each difficulty (shown under the buttons).
 const DIFFICULTY_DESC = {
-    normal: 'Le plus de tours avant la mort subite, et aucun événement doublé « x2 ». Idéal pour débuter.',
+    easy: 'Donjon plus court et aventuriers plus résistants. Pour découvrir le jeu ou finir une partie sereinement.',
+    normal: 'Les règles de base, sans aucun aménagement. Aucun événement doublé « x2 ».',
     advanced: 'Moins de tours, et les événements « x2 » (à double effet) peuvent survenir.',
     expert: 'Le moins de tours, tous les événements possibles dont les « x2 ». Le plus exigeant.'
 };
+
+const ITEMS_DESC_ON =
+    'Des <b>Potions</b> (1 tuile sur 6) rendent 1 PV au premier aventurier qui les trouve. ' +
+    'Des <b>Parchemins</b> apparaissent en terrassant un Dragon (1 fois sur 2), en éteignant un ' +
+    'incendie (1 sur 3) ou avec une Boule de feu (1 sur 3) : ils réveillent un aventurier inconscient, ' +
+    'où qu\'il soit.';
+const ITEMS_DESC_OFF = 'Potions et Parchemins pour adoucir l\'exploration. Indisponible en difficulté Expert.';
+
+/** Bullet list of what the chosen difficulty actually changes. */
+function difficultyFacts(info) {
+    if (!info) return [];
+    const facts = [
+        '<b>' + info.turns + ' tours</b> avant la mort subite',
+        'pioche de <b>' + info.tiles + ' tuiles</b> (la Sortie est parmi les 5 dernières)'
+    ];
+    if (info.bonusHp) facts.push('<b>+' + info.bonusHp + ' PV</b> pour chaque aventurier');
+    facts.push(info.doubled
+        ? 'événements <b>« x2 »</b> présents dans la pioche'
+        : 'aucun événement <b>« x2 »</b>');
+    if (!info.allowsItems) facts.push('objets <b>indisponibles</b> à cette difficulté');
+    return facts;
+}
 
 // If we arrived back with leftover query params, clean the URL.
 const urlParams = new URLSearchParams(window.location.search);
@@ -102,6 +125,14 @@ $(document).ready(() => {
         Socket.emit('set-difficulty', {
             roomId: Player.roomId, ownerId: Player.id, token: Player.token,
             difficulty: $(this).data('diff')
+        });
+    });
+
+    // Items variant : a room-wide setting, so it goes through the server.
+    $('#wr-items').on('change', function () {
+        Socket.emit('set-items-enabled', {
+            roomId: Player.roomId, ownerId: Player.id, token: Player.token,
+            enabled: $(this).is(':checked')
         });
     });
 
@@ -268,6 +299,14 @@ Socket.on('players-list-changed', (room) => {
         $(this).prop('disabled', !isOwner);
     });
     $('#wr-difficulty-desc').text(DIFFICULTY_DESC[room.difficulty] || DIFFICULTY_DESC.normal);
+    $('#wr-difficulty-facts').html(
+        difficultyFacts(room.difficultyInfo).map(f => '<li>' + f + '</li>').join(''));
+
+    // Items opt-in : room-wide, owner-driven, and never available in Expert.
+    const itemsAllowed = !room.difficultyInfo || room.difficultyInfo.allowsItems;
+    $('#wr-items').prop('checked', !!room.itemsEnabled).prop('disabled', !isOwner || !itemsAllowed);
+    $('.items-optin').toggleClass('disabled', !itemsAllowed);
+    $('#wr-items-desc').html(room.itemsEnabled ? ITEMS_DESC_ON : ITEMS_DESC_OFF);
 
     // Character grid
     const $grid = $('#wr-character-grid').empty();

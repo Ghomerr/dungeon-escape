@@ -92,11 +92,22 @@
                         <div class="difficulty-block">
                             <h3>Difficulté</h3>
                             <div id="wr-difficulty" class="difficulty-options">
+                                <button class="diff-btn" data-diff="easy">Facile</button>
                                 <button class="diff-btn" data-diff="normal">Normal</button>
                                 <button class="diff-btn" data-diff="advanced">Avancé</button>
                                 <button class="diff-btn" data-diff="expert">Expert</button>
                             </div>
                             <p id="wr-difficulty-desc" class="hint difficulty-desc"></p>
+                            <ul id="wr-difficulty-facts" class="difficulty-facts"></ul>
+
+                            <!-- Optional variant, shared by the room (owner sets it). -->
+                            <div class="items-optin">
+                                <label for="wr-items">
+                                    <input type="checkbox" id="wr-items" />
+                                    <span>Ajouter des <b>objets</b> dans le Donjon</span>
+                                </label>
+                                <p id="wr-items-desc" class="hint"></p>
+                            </div>
                         </div>
 
                         <!-- Per-player, saved locally: nothing is sent to the room. -->
