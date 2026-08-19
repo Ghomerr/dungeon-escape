@@ -269,14 +269,15 @@ Lorsqu'un aventurier entre sur cette tuile, il doit immédiatement réussir un *
 Une case à cocher, dans le choix de la difficulté, ajoute des **objets** dans le **Donjon**. Cette variante est disponible à toutes les difficultés **sauf Expert**.
 
 ## Potions
-Chaque fois qu'une tuile est révélée par une action **Découvrir** ou **Explorer**, elle a **1 chance sur 6** d'abriter une **Potion**.
+Chaque fois qu'une tuile est révélée par une action **Découvrir** ou **Explorer**, elle a **1 chance sur 4** d'abriter une **Potion**.
 
 Le premier **aventurier** à entrer sur la tuile la boit et récupère immédiatement **1 point de vie**. Un aventurier déjà au maximum de ses points de vie la laisse sur place pour quelqu'un d'autre.
 
 ## Parchemins
-Les **Parchemins** ne se trouvent pas dans les tuiles : ils apparaissent quand l'équipe nettoie le **Donjon**.
+Les **Parchemins** ne se trouvent pas dans les tuiles : ils apparaissent quand l'équipe se débarrasse d'une menace du **Donjon**.
 
-* En terrassant un **Dragon** : **1 chance sur 2**.
+* Quand le **Paladin** terrasse un **Dragon** : **à coup sûr**.
+* Quand un **Dragon** renonce et disparaît du **Donjon**, faute de proie à portée (aventuriers cachés ou à plus de 7 tuiles) : **2 chances sur 3**.
 * En éteignant un **Incendie** : **1 chance sur 3**.
 * Quand le **Pyromancien** perce une paroi avec une **Boule de feu** : **1 chance sur 3**, sur sa propre tuile.
 

@@ -24,11 +24,13 @@ const DIFFICULTIES = ['easy', 'normal', 'advanced', 'expert'];
 const EASY_DECK_SIZE = 40;
 const EASY_BONUS_HP = 1;
 
-// Optional "objets" variant.
-const POTION_CHANCE = 6;        // 1 in 6 when a tile is discovered / explored
-const SCROLL_ON_DRAGON = 2;     // 1 in 2 when a dragon is destroyed
-const SCROLL_ON_FIRE = 3;       // 1 in 3 when a fire is put out
-const SCROLL_ON_FIREBALL = 3;   // 1 in 3 when the Pyromancer blasts a wall
+// Optional "objets" variant. Probabilities, not "one in N", so a certainty can
+// be expressed alongside a fraction.
+const POTION_CHANCE = 1 / 4;        // a tile hides a Potion once in four
+const SCROLL_ON_SLAIN_DRAGON = 1;   // the Paladin always finds one on the corpse
+const SCROLL_ON_LOST_DRAGON = 2 / 3;// a dragon that gives up leaves its lair behind
+const SCROLL_ON_FIRE = 1 / 3;       // putting a fire out
+const SCROLL_ON_FIREBALL = 1 / 3;   // blasting a wall open
 
 const PHASE = { ACTION: 'ACTION', DRAGON: 'DRAGON', EVENT: 'EVENT', END: 'END' };
 const GAME_STATUS = { PLAYING: 'PLAYING', WON: 'WON', LOST: 'LOST' };
@@ -432,21 +434,22 @@ function applyDamage(room, char, amount) {
 // Objets (optional variant) : Potions on tiles, Parchemins in the team stock
 // ---------------------------------------------------------------------------
 
-/** A freshly placed tile may hide a Potion (1 chance in 6). */
+/** A freshly placed tile may hide a Potion. */
 function maybeDropPotion(room, tile) {
     const g = room.game;
     if (!g.itemsEnabled || tile.kind === 'exit') return;
-    if (Math.floor(Math.random() * POTION_CHANCE) !== 0) return;
+    if (Math.random() >= POTION_CHANCE) return;
     tile.item = 'potion';
     g.potionsFound++;
     pushLog(room, '🧪 Une Potion scintille sur la tuile fraîchement révélée.');
+    pushFx(room, { kind: 'item-found', item: 'potion', row: tile.row, col: tile.col });
 }
 
 /** Cleaning the dungeon up sometimes yields a Parchemin. */
-function grantScroll(room, chanceOneIn, reason) {
+function grantScroll(room, probability, reason) {
     const g = room.game;
     if (!g.itemsEnabled) return false;
-    if (Math.floor(Math.random() * chanceOneIn) !== 0) return false;
+    if (Math.random() >= probability) return false;
     g.scrolls++;
     g.scrollsFound++;
     pushLog(room, '📜 ' + reason + ' — un Parchemin est récupéré (' + g.scrolls + ' en réserve).');
@@ -1071,7 +1074,7 @@ function doAbility(room, char, payload) {
             g.dragons = g.dragons.filter(dr => dr.id !== dragon.id);
             pushLog(room, '⚔️ ' + char.name + ' terrasse un Dragon adjacent !');
             pushFx(room, { kind: 'dragon-slain', row: dragon.row, col: dragon.col, by: char.name });
-            grantScroll(room, SCROLL_ON_DRAGON, 'Le Dragon abattu gardait un trésor');
+            grantScroll(room, SCROLL_ON_SLAIN_DRAGON, 'Le Dragon abattu gardait un trésor');
             return { ok: true };
         }
         case 'inspiration': {
@@ -1253,6 +1256,7 @@ function moveOneDragon(room, dragon) {
         // either has a victim and advances, or disappears; it never lingers.
         dragon.remove = true;
         pushLog(room, '🐉 Un Dragon ne trouve plus de proie et disparaît.');
+        grantScroll(room, SCROLL_ON_LOST_DRAGON, 'Le Dragon parti, son antre se laisse fouiller');
         return;
     }
     const dir = Utils.firstStepToward(g.board, dragon.row, dragon.col, target.row, target.col, DRAGON_PATH);

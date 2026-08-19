@@ -24,10 +24,10 @@ const DIFFICULTY_DESC = {
 };
 
 const ITEMS_DESC_ON =
-    'Des <b>Potions</b> (1 tuile sur 6) rendent 1 PV au premier aventurier qui les trouve. ' +
-    'Des <b>Parchemins</b> apparaissent en terrassant un Dragon (1 fois sur 2), en éteignant un ' +
-    'incendie (1 sur 3) ou avec une Boule de feu (1 sur 3) : ils réveillent un aventurier inconscient, ' +
-    'où qu\'il soit.';
+    'Des <b>Potions</b> (1 tuile sur 4) rendent 1 PV au premier aventurier qui les trouve. ' +
+    'Des <b>Parchemins</b> apparaissent à coup sûr quand le Paladin terrasse un Dragon, 2 fois sur 3 ' +
+    'quand un Dragon renonce et disparaît, et 1 fois sur 3 en éteignant un incendie ou avec une ' +
+    'Boule de feu : ils relèvent un aventurier inconscient, où qu\'il soit.';
 const ITEMS_DESC_OFF = 'Potions et Parchemins pour adoucir l\'exploration. Indisponible en difficulté Expert.';
 
 /** Bullet list of what the chosen difficulty actually changes. */
@@ -86,6 +86,15 @@ $(document).ready(() => {
     Lobby.$submit = $('#lobby-btn');
     Lobby.$startBtn = $('#start-btn');
     Lobby.$debugButton = $('#debug-button');
+
+    // Local play history (this browser only).
+    $('#history-clear').click(() => {
+        Dialog.openTwoChoicesDialog(Dialog.$simpleDialog, '🗑️ Tout effacer',
+            'Supprimer l\'historique de vos dernières parties ?<br>' +
+            '<span class="hint">Cette action est définitive et ne concerne que ce navigateur.</span>',
+            'Tout effacer', () => { writeHistory([]); renderHistory(); }, 'Annuler', null);
+    });
+    renderHistory();
 
     $('#random-room-id-btn').click(() => Socket.emit('get-random-room-id'));
 
@@ -242,6 +251,87 @@ Socket.on('rooms-status-changed', (data) => {
     Lobby.$roomsList.show();
 });
 
+// ---------------------------------------------------------------------------
+// Local history : the last finished games, written by the game page into this
+// browser's localStorage. Nothing here ever reaches the server.
+// ---------------------------------------------------------------------------
+
+const HISTORY_KEY = 'de-history';
+const DIFF_LABEL = { easy: 'Facile', normal: 'Normal', advanced: 'Avancé', expert: 'Expert' };
+const RANK_LABEL = { gold: '🥇 Or', silver: '🥈 Argent', bronze: '🥉 Bronze' };
+
+function readHistory() {
+    try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        const list = raw ? JSON.parse(raw) : [];
+        return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+}
+function writeHistory(list) {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); } catch (e) { /* full / disabled */ }
+}
+
+// "12 min 07 s" — same shape as the end-of-game screen.
+function fmtDuration(ms) {
+    if (ms == null) return '—';
+    const total = Math.max(0, Math.round(ms / 1000));
+    const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+    const pad = n => (n < 10 ? '0' + n : '' + n);
+    if (h) return h + ' h ' + pad(m) + ' min';
+    if (m) return m + ' min ' + pad(s) + ' s';
+    return s + ' s';
+}
+function fmtDate(ts) {
+    const d = new Date(ts);
+    const pad = n => (n < 10 ? '0' + n : '' + n);
+    return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() +
+        ' à ' + pad(d.getHours()) + 'h' + pad(d.getMinutes());
+}
+
+function renderHistory() {
+    const $panel = $('#history-panel');
+    const list = readHistory();
+    if (!list.length || Lobby.inRoom) { $panel.hide(); return; }
+    const $list = $('#history-list').empty();
+
+    list.forEach((h, i) => {
+        const won = h.status === 'WON';
+        const tokens = (h.characters || []).map(id =>
+            '<span class="hist-token" style="background-image:url(' + portraitCardUrl(id) + ')" title="' + id + '"></span>').join('');
+        const items = h.items
+            ? '<span class="hist-items on" title="Potions et Parchemins activés">' +
+              '<i class="fas fa-flask"></i> <i class="fas fa-scroll"></i></span>'
+            : '<span class="hist-items off" title="Sans objets"><i class="fas fa-ban"></i></span>';
+        const result = won
+            ? '<b class="hist-win">Victoire</b> ' + (h.rank ? RANK_LABEL[h.rank] : '')
+            : '<b class="hist-loss">Défaite</b>';
+
+        const $row = $(
+            '<div class="hist-row' + (won ? ' is-win' : ' is-loss') + '">' +
+            '<div class="hist-when"><b>' + fmtDate(h.at) + '</b>' +
+            '<span class="hist-sub"><i class="fas fa-stopwatch"></i> ' + fmtDuration(h.durationMs) + '</span></div>' +
+            '<div class="hist-diff"><span class="diff-chip diff-' + h.difficulty + '">' +
+            (DIFF_LABEL[h.difficulty] || h.difficulty) + '</span>' + items + '</div>' +
+            '<div class="hist-team"><span class="hist-sub">' + h.players + ' joueur' + (h.players > 1 ? 's' : '') +
+            ' · ' + (h.characters || []).length + ' persos</span><div class="hist-tokens">' + tokens + '</div></div>' +
+            '<div class="hist-result">' + result +
+            '<span class="hist-sub">' + h.escaped + ' / ' + h.total + ' sortis · ' +
+            h.survivors + ' survivant' + (h.survivors > 1 ? 's' : '') + '</span></div>' +
+            '<div class="hist-nums"><span><i class="fas fa-hourglass-half"></i> ' + h.turns + ' tours</span>' +
+            '<span><i class="fas fa-layer-group"></i> ' + (h.tilesLeft != null ? h.tilesLeft : '—') + ' tuiles restantes</span></div>' +
+            '<button class="hist-del" title="Supprimer cette ligne"><i class="fas fa-xmark"></i></button>' +
+            '</div>');
+        $row.find('.hist-del').click(() => {
+            const cur = readHistory();
+            cur.splice(i, 1);
+            writeHistory(cur);
+            renderHistory();
+        });
+        $list.append($row);
+    });
+    $panel.show();
+}
+
 Socket.on('user-connected', (data) => {
     Player.id = data.id;
     Player.token = data.token;
@@ -249,6 +339,7 @@ Socket.on('user-connected', (data) => {
     Lobby.inRoom = true;
     Lobby.$inputs.hide();
     Lobby.$roomsList.hide();
+    $('#history-panel').hide();
     Lobby.$waitingRoom.show();
     // Lock the page to the viewport (mobile) so the character list scrolls under
     // a fixed room recap.

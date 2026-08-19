@@ -283,6 +283,62 @@ button.primary:hover:not(:disabled) { background: linear-gradient(to bottom, #e0
 }
 .tuto-optin .hint { margin-top: 5px; font-size: .76rem; }
 
+/* ---- Local play history (home screen) ------------------------------------ */
+#history-panel .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ghost-btn {
+    font-size: .74rem; padding: 4px 9px; background: transparent;
+    border: 1px solid var(--border); border-radius: 6px; color: var(--muted); cursor: pointer;
+}
+.ghost-btn:hover { color: #ffb4a2; border-color: #a8543f; }
+
+.hist-row {
+    display: grid; gap: 6px 12px; align-items: center; position: relative;
+    grid-template-columns: minmax(120px, 1.1fr) minmax(120px, .9fr) minmax(120px, 1fr) minmax(130px, 1.1fr) minmax(120px, 1fr) 28px;
+    padding: 9px 10px; margin-bottom: 6px;
+    background: var(--panel2); border: 1px solid var(--border);
+    border-left: 4px solid var(--border); border-radius: 8px;
+    font-size: .8rem;
+}
+.hist-row.is-win { border-left-color: #4e9a4e; }
+.hist-row.is-loss { border-left-color: #8d3a2c; }
+.hist-sub { display: block; font-size: .72rem; color: var(--muted); }
+.hist-win { color: #8fe08f; }
+.hist-loss { color: #ff9c86; }
+
+/* Difficulty chip: the colour carries the meaning, the label confirms it. */
+.diff-chip {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: .72rem; font-weight: bold; color: #1c1208;
+}
+.diff-chip.diff-easy { background: #7fc47f; }
+.diff-chip.diff-normal { background: #c79a47; }
+.diff-chip.diff-advanced { background: #d97a3c; }
+.diff-chip.diff-expert { background: #b4453a; color: #ffe9e2; }
+.hist-items { margin-left: 8px; font-size: .82rem; }
+.hist-items.on .fa-flask { color: #8ff0a0; }
+.hist-items.on .fa-scroll { color: #ffd75e; }
+.hist-items.off { color: #8d5a4e; }
+
+.hist-tokens { display: flex; gap: 3px; margin-top: 3px; flex-wrap: wrap; }
+.hist-token {
+    width: 22px; height: 22px; border-radius: 50%;
+    background-size: cover; background-position: center top;
+    border: 1px solid var(--gold); flex: 0 0 auto;
+}
+.hist-nums span { display: block; font-size: .74rem; color: var(--muted); }
+.hist-nums i { width: 14px; color: var(--gold); }
+
+.hist-del {
+    background: transparent; border: none; color: var(--muted);
+    cursor: pointer; font-size: 1rem; padding: 4px 6px; border-radius: 6px;
+}
+.hist-del:hover { color: #ff9c86; background: #ffffff10; }
+
+@media (max-width: 780px) {
+    .hist-row { grid-template-columns: 1fr 1fr 28px; }
+    .hist-row .hist-del { position: absolute; top: 6px; right: 6px; }
+}
+
 .emoji-bar { margin: 14px 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .emoji-send { font-size: 1.1rem; padding: 4px 8px; }
 .emoji-bubble { font-weight: bold; color: var(--gold-light); margin-left: 8px; }

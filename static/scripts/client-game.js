@@ -866,6 +866,13 @@ function processFx(state) {
 
 function playFx(fx) {
     switch (fx.kind) {
+        case 'item-found':
+            showBigToast({
+                color: '#2c4d5e', iconHtml: '<span class="toast-icon">' + (fx.item === 'scroll' ? '📜' : '🧪') + '</span>',
+                label: (fx.item === 'scroll' ? 'Un Parchemin' : 'Une Potion') + ' brille dans le Donjon',
+                sub: 'Le premier aventurier sur la tuile la ramasse', ms: 2200
+            });
+            break;
         case 'potion':
             showBigToast({
                 color: '#2c5e3a', iconHtml: '<span class="toast-icon">🧪</span>',
@@ -1514,11 +1521,15 @@ function renderBoard(state) {
             $tile.append('<div class="fire-values">' + t.fireValues.join('·') + '</div>');
         }
 
-        // Loot waiting to be picked up (items variant).
+        // Loot waiting to be picked up (items variant). FontAwesome rather than
+        // emoji: the glyphs are guaranteed to render on every OS, and they sit
+        // above the adventurer tokens so a crowded tile never hides them.
         if (t.item === 'potion') {
-            $tile.append('<div class="tile-item item-potion" title="Potion : +1 PV pour le premier aventurier qui arrive">🧪</div>');
+            $tile.append('<div class="tile-item item-potion" title="Potion : +1 PV pour le premier aventurier qui arrive">' +
+                faIco('flask') + '</div>');
         } else if (t.item === 'scroll') {
-            $tile.append('<div class="tile-item item-scroll" title="Parchemin à ramasser">📜</div>');
+            $tile.append('<div class="tile-item item-scroll" title="Parchemin à ramasser">' +
+                faIco('scroll') + '</div>');
         }
 
         state.dragons.filter(d => d.row === t.row && d.col === t.col).forEach(d => {
@@ -1825,9 +1836,46 @@ function renderActions(state) {
     else $('#board-hint').text('En attente du tour des autres joueurs…');
 }
 
+// ---------------------------------------------------------------------------
+// Local history : the last 10 finished games, kept in this browser only and
+// listed on the home screen. Written once, when the end overlay first opens.
+// ---------------------------------------------------------------------------
+
+const HISTORY_KEY = 'de-history';
+const HISTORY_MAX = 10;
+
+function saveGameToHistory(state) {
+    const s = state.endStats || {};
+    const alive = (state.characters || []).filter(c => !c.dead);
+    const entry = {
+        at: Date.now(),
+        durationMs: s.durationMs != null ? s.durationMs : null,
+        difficulty: state.difficulty || 'normal',
+        items: !!state.itemsEnabled,
+        players: new Set((state.characters || []).map(c => c.ownerId)).size,
+        characters: (state.characters || []).map(c => c.id),
+        status: state.status,
+        rank: state.rank || null,
+        escaped: s.escaped != null ? s.escaped : 0,
+        survivors: alive.length,
+        total: s.total != null ? s.total : (state.characters || []).length,
+        turns: s.turns != null ? s.turns : state.round,
+        tilesLeft: state.deckLeft != null ? state.deckLeft : null
+    };
+    try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        const list = raw ? JSON.parse(raw) : [];
+        list.unshift(entry);
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, HISTORY_MAX)));
+    } catch (e) {
+        // A full or disabled localStorage must never break the end screen.
+    }
+}
+
 function renderEnd(state) {
     const $ov = $('#end-overlay');
     if ($ov.is(':visible')) return;
+    saveGameToHistory(state);
     const won = state.status === 'WON';
     $('#end-title').html(won ? '🏆 Victoire !' : '☠️ Défaite');
     const medals = { gold: '🥇 Rang Or', silver: '🥈 Rang Argent', bronze: '🥉 Rang Bronze' };

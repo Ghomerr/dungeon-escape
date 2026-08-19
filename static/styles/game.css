@@ -373,14 +373,35 @@ body.in-game { height: 100dvh; overflow: hidden; }
     text-shadow: 0 1px 0 #000, 0 -1px 0 #000, 1px 0 0 #000, -1px 0 0 #000;
 }
 
-/* Loot lying on a tile, waiting for the first adventurer to reach it. */
+/* Loot lying on a tile, waiting for the first adventurer to reach it. It floats
+   gently and pulses inside a soft halo, the same read as the active adventurer's
+   aura so the eye catches it without confusing it with a token. */
 .tile-item {
-    position: absolute; right: 3px; bottom: 3px; z-index: 5;
-    font-size: 1rem; line-height: 1; pointer-events: none;
-    filter: drop-shadow(0 0 3px #000) drop-shadow(0 0 6px #ffd75e88);
-    animation: item-bob 1.8s ease-in-out infinite;
+    /* Above the adventurer tokens (z-index 7 for the active one): a tile packed
+       with four portraits must never swallow the loot sitting on it. */
+    position: absolute; right: 2px; bottom: 2px; z-index: 9;
+    width: 19px; height: 19px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .68rem; line-height: 1; pointer-events: none;
+    background: #14100acc; border: 1px solid #0008;
+    animation: item-bob 2.2s ease-in-out infinite, item-halo 2.2s ease-in-out infinite;
 }
-@keyframes item-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.tile-item.item-potion { color: #8ff0a0; }
+.tile-item.item-scroll { color: #ffd75e; }
+@keyframes item-bob {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-4px) scale(1.06); }
+}
+/* Potion: green halo. Overridden below for the scroll. */
+@keyframes item-halo {
+    0%, 100% { box-shadow: 0 0 0 1px #7fe08a88, 0 0 5px 1px #7fe08a66; }
+    50% { box-shadow: 0 0 0 1px #7fe08acc, 0 0 13px 4px #7fe08aaa; }
+}
+.tile-item.item-scroll { animation-name: item-bob, item-halo-scroll; }
+@keyframes item-halo-scroll {
+    0%, 100% { box-shadow: 0 0 0 1px #ffd75e88, 0 0 5px 1px #ffd75e66; }
+    50% { box-shadow: 0 0 0 1px #ffd75ecc, 0 0 13px 4px #ffd75eaa; }
+}
 
 /* bad-event layer: coloured veil + glow, on top of the image */
 .state-fx { position: absolute; inset: 0; z-index: 3; pointer-events: none; }

@@ -47,7 +47,7 @@ $NODE tools/sim/by-character.js tools/sim/results-normal.json 4
 $NODE tools/sim/matrix.js 400
 $NODE tools/sim/matrix.js 400 --md      # même table, en Markdown pour le rapport
 
-# Non-régression des règles corrigées (56 assertions sur le moteur réel)
+# Non-régression des règles corrigées (67 assertions sur le moteur réel)
 $NODE tools/sim/check-fixes.js
 ```
 

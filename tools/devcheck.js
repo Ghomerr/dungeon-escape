@@ -241,6 +241,55 @@ async function run() {
         await cdp.send('Page.navigate', { url: BASE + '/' });
         await cdp.waitFor("document.querySelector('#lobby-btn')", 'lobby form');
         await sleep(400);
+
+        // Local history panel: seed a few finished games and check the home
+        // screen lists them (a fresh profile has none, so it would never show).
+        const hist = await cdp.eval(`
+            (() => {
+                const mk = (o) => Object.assign({
+                    at: 1755600000000, durationMs: 1287000, difficulty: 'normal', items: false,
+                    players: 1, characters: ['gnome', 'bard', 'druid', 'paladin'],
+                    status: 'LOST', rank: null, escaped: 0, survivors: 2, total: 4,
+                    turns: 19, tilesLeft: 14
+                }, o);
+                localStorage.setItem('de-history', JSON.stringify([
+                    mk({ difficulty: 'easy', items: true, status: 'WON', rank: 'gold', escaped: 4, survivors: 4, turns: 22, tilesLeft: 3 }),
+                    mk({ difficulty: 'advanced', items: true, status: 'WON', rank: 'bronze', escaped: 2, survivors: 3, players: 2, characters: ['elf-rogue', 'dwarf', 'pyromancer', 'shadow-hunter', 'gnome'] }),
+                    mk({ difficulty: 'expert' })
+                ]));
+                renderHistory();
+                return {
+                    visible: !!document.querySelector('#history-panel').offsetParent,
+                    rows: document.querySelectorAll('.hist-row').length,
+                    chips: [...document.querySelectorAll('.diff-chip')].map(c => c.textContent.trim()),
+                    tokens: document.querySelectorAll('.hist-token').length,
+                    delButtons: document.querySelectorAll('.hist-del').length
+                };
+            })()`);
+        if (hist) {
+            log('  · history: ' + JSON.stringify(hist));
+            if (!hist.visible || hist.rows !== 3) {
+                problems.push({ kind: 'lobby', text: 'the history panel does not list the stored games: ' + JSON.stringify(hist) });
+            }
+            if (hist.tokens !== 13) {   // 4 + 5 + 4 adventurer tokens
+                problems.push({ kind: 'lobby', text: 'history rows do not show one token per adventurer (' + hist.tokens + ')' });
+            }
+            if (hist.delButtons !== 3) {
+                problems.push({ kind: 'lobby', text: 'history rows are missing their delete button' });
+            }
+        }
+        await shoot(cdp, '00-home-history');
+        // Deleting one row must leave the others alone.
+        const afterDel = await cdp.eval(`
+            (() => {
+                document.querySelector('.hist-row .hist-del').click();
+                return { rows: document.querySelectorAll('.hist-row').length,
+                         stored: JSON.parse(localStorage.getItem('de-history') || '[]').length };
+            })()`);
+        if (afterDel && (afterDel.rows !== 2 || afterDel.stored !== 2)) {
+            problems.push({ kind: 'lobby', text: 'deleting one history row misbehaves: ' + JSON.stringify(afterDel) });
+        }
+        await cdp.eval("localStorage.removeItem('de-history'); renderHistory(); true");
         const room = 'DEVCHK' + Math.floor(Math.random() * 900 + 100);
         await cdp.eval(`
             (() => {
@@ -555,6 +604,46 @@ async function run() {
                 problems.push({ kind: 'layout', text: 'the Parchemin picker has an unexpected title: ' + itemsUi.pickerTitle });
             }
         }
+
+        //  (a3) Loot on the board: a floating, haloed marker on the tile. Forced
+        //       in, since a scripted run rarely uncovers one where we can see it.
+        const lootUi = await cdp.eval(`
+            (() => {
+                // Any modal still open from an earlier probe would hide the board.
+                $('.ui-dialog-content').each(function () {
+                    try { $(this).dialog('close'); } catch (e) {}
+                });
+                const st = Game.state;
+                const keys = Object.keys(st.board);
+                const wasItems = st.itemsEnabled;
+                st.itemsEnabled = true;
+                st.board[keys[0]].item = 'potion';
+                if (keys[1]) st.board[keys[1]].item = 'scroll';
+                render(st);
+                const els = [...document.querySelectorAll('.tile-item')];
+                const out = {
+                    count: els.length,
+                    classes: els.map(e => e.className),
+                    animated: els.map(e => getComputedStyle(e).animationName)
+                };
+                return out;   // left on the board on purpose: the screenshot follows
+            })()`);
+        if (lootUi) {
+            log('  · loot UI: ' + JSON.stringify(lootUi));
+            if (lootUi.count < 1) {
+                problems.push({ kind: 'layout', text: 'a tile carrying an item shows no marker' });
+            }
+            if (!lootUi.animated.every(a => /item-bob/.test(a) && /halo/.test(a))) {
+                problems.push({ kind: 'layout', text: 'tile items are missing the float / halo animation: ' + JSON.stringify(lootUi.animated) });
+            }
+        }
+        await shoot(cdp, '25-board-items');
+        await cdp.eval(`
+            (() => {
+                const st = Game.state;
+                Object.keys(st.board).forEach(k => { st.board[k].item = null; });
+                st.itemsEnabled = false; render(st); return true;
+            })()`);
 
         //  (b) An adventurer standing on the Exit stays ON the board (still in
         //      play), flagged as safe.

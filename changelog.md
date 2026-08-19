@@ -3,6 +3,47 @@
 All notable changes to Dungeon Escape are documented here.
 Versions use a calendar scheme: `vYYYY.MM.DD`.
 
+## v2026.08.19
+
+### Added
+- **Your last 10 games, on the home screen.** Every finished run is now written
+  to this browser's local storage and listed under the join form: date and
+  duration, a colour-coded difficulty chip, whether items were on (flask +
+  scroll) or off (a "no entry" sign), how many players and which adventurers
+  (the same round portraits used on the board), the result with its rank and
+  survivor count, turns played and tiles left undiscovered. Each row has its own
+  delete button, and a "Tout effacer" button clears the lot behind a
+  confirmation. Nothing ever leaves the browser.
+
+### Changed
+- **Items are more generous.** Potions now hide in one tile out of **four**
+  instead of six. A Parchemin is **certain** when the Paladin slays a Dragon,
+  and drops **2 times out of 3** when a Dragon gives up and leaves the dungeon
+  (a case that used to yield nothing at all). Fires and Fireballs still pay 1
+  in 3. Measured effect at 4 adventurers: Facile with items goes from 39 % to
+  **54 %** wins, Normal with items from 5 % to **9.3 %**.
+- **Loot is legible on the board.** Items are drawn as a FontAwesome flask or
+  scroll — never emoji, which render inconsistently — inside a dark disc that
+  floats gently and pulses in a coloured halo (green for a Potion, gold for a
+  Parchemin), echoing the active adventurer's aura. They sit **above** the
+  adventurer tokens, so a tile crowded with four portraits no longer swallows
+  the item lying on it.
+- **Trapped plates look trapped.** The three plate tiles were three near-identical
+  drawings with five dots. They now carry a wide plate peppered with ~30 spike
+  holes drawn as small engraved "+" marks, scattered at random and split between
+  red (armed) and grey (spent). Each tile is seeded from its own name, so the
+  three differ while staying reproducible.
+
+### Fixed
+- **Finding an item now announces itself.** A Potion appearing on a freshly
+  revealed tile raised a journal line but no toast, so it went unnoticed. It now
+  raises one, alongside the existing toasts for drinking a Potion, finding a
+  Parchemin and reading one.
+- **Facile and Normal read as different difficulties.** They always had distinct
+  blurbs in the source, but a browser holding a stale cached `client.js` from
+  before Facile existed fell back to Normal's text for both. The service worker
+  cache is bumped so the update actually lands.
+
 ## v2026.08.18
 
 Every rule below was checked against the original **Sub Terra** rulebook (the

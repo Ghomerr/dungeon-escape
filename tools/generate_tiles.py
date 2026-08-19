@@ -379,24 +379,48 @@ def draw_door_open(img, edge, style='wood'):
             d.line([(lx0 + lx1) // 2, y0 + 1, (lx0 + lx1) // 2, y1 - 1], fill=(60, 40, 20))
 
 
-def draw_spikes(img, red=False):
+def draw_spikes(img, rnd, red=False):
+    """Trapped plate: a wide pressure plate peppered with spike holes.
+
+    The holes are drawn as small "+" marks scattered at random rather than on a
+    fixed grid — a regular pattern read as decoration, a scattered one reads as
+    a hazard. Red marks are the armed ones, grey the spent ones; `red` tiles
+    simply carry more of the former. `rnd` is the tile's own seeded generator,
+    so a given tile always looks the same while the three trap tiles differ.
+    """
     d = ImageDraw.Draw(img, "RGBA")
-    # central pressure plate
-    d.rectangle([VC - 12, HC - 12, VC + 12, HC + 12],
+    PLATE = 24
+    # Central pressure plate, with a bevel to lift it off the floor.
+    d.rectangle([VC - PLATE, HC - PLATE, VC + PLATE, HC + PLATE],
                 fill=(120, 108, 84), outline=(70, 60, 40))
-    d.rectangle([VC - 8, HC - 8, VC + 8, HC + 8], outline=(90, 80, 55))
-    # spike holes
-    for (dx, dy) in [(-6, -6), (6, -6), (-6, 6), (6, 6), (0, 0)]:
-        px, py = VC + dx, HC + dy
-        col = (150, 40, 40) if red else (40, 36, 30)
-        d.ellipse([px - 2, py - 2, px + 2, py + 2], fill=col)
-    if red:
-        # red runes
-        for a in range(0, 360, 60):
-            rx = VC + int(15 * math.cos(math.radians(a)))
-            ry = HC + int(15 * math.sin(math.radians(a)))
-            d.line([rx - 2, ry, rx + 2, ry], fill=(200, 60, 40))
-            d.line([rx, ry - 2, rx, ry + 2], fill=(200, 60, 40))
+    d.rectangle([VC - PLATE + 4, HC - PLATE + 4, VC + PLATE - 4, HC + PLATE - 4],
+                outline=(90, 80, 55))
+
+    GREY = (54, 48, 40)
+    GREY_HI = (150, 140, 118)
+    RED = (170, 44, 34)
+    RED_HI = (232, 96, 70)
+    red_share = 0.55 if red else 0.3
+
+    # Poisson-ish scatter: keep the marks apart so they stay readable.
+    spots, tries = [], 0
+    while len(spots) < 34 and tries < 1500:
+        tries += 1
+        px = VC + rnd.randint(-PLATE + 3, PLATE - 3)
+        py = HC + rnd.randint(-PLATE + 3, PLATE - 3)
+        if any((px - qx) ** 2 + (py - qy) ** 2 < 30 for qx, qy in spots):
+            continue
+        spots.append((px, py))
+
+    for (px, py) in spots:
+        armed = rnd.random() < red_share
+        col, hi = (RED, RED_HI) if armed else (GREY, GREY_HI)
+        arm = rnd.choice([2, 3, 3])
+        # Draw the highlight offset by one pixel so each mark looks engraved.
+        d.line([px - arm, py + 1, px + arm, py + 1], fill=hi)
+        d.line([px + 1, py - arm, px + 1, py + arm], fill=hi)
+        d.line([px - arm, py, px + arm, py], fill=col)
+        d.line([px, py - arm, px, py + arm], fill=col)
 
 
 def draw_abyss(img, mask, rnd):
@@ -678,7 +702,7 @@ def render(spec):
     if 'arrow' in spec:
         draw_arrow(img, spec['arrow'])
     if spec.get('spikes'):
-        draw_spikes(img, red=spec.get('red', False))
+        draw_spikes(img, rnd, red=spec.get('red', False))
     if spec.get('entrance'):
         draw_entrance_shadow(img)
     if spec.get('exitgate'):

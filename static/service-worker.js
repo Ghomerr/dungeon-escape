@@ -1,7 +1,7 @@
 /* Dungeon Escape — minimal PWA service worker.
    Goal: make the app installable and load static assets fast. The game itself
    needs a live socket.io connection, so real-time traffic is never intercepted. */
-const CACHE = 'dungeon-escape-v9';
+const CACHE = 'dungeon-escape-v10';
 
 // On a developer machine the cache is pure nuisance: an edited stylesheet keeps
 // being served from yesterday's copy. Detected once, used by the fetch handler.

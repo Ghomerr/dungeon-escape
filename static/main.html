@@ -79,6 +79,18 @@
                 <div id="rooms-list-content"></div>
             </section>
 
+            <!-- Local history: last 10 finished games, this browser only -->
+            <section id="history-panel" class="panel" style="display:none;">
+                <h2 class="panel-title">
+                    Vos 10 dernières parties
+                    <button id="history-clear" class="ghost-btn" title="Tout effacer">
+                        <i class="fas fa-trash"></i> Tout effacer
+                    </button>
+                </h2>
+                <div id="history-list"></div>
+                <p class="hint">Ces statistiques ne quittent jamais ce navigateur.</p>
+            </section>
+
             <!-- Waiting room -->
             <section id="waiting-room" class="panel wide" style="display:none;">
                 <h2 class="panel-title">Salle : <span id="wr-room-name"></span></h2>
