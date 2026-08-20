@@ -278,7 +278,76 @@ async function run() {
                 problems.push({ kind: 'lobby', text: 'history rows are missing their delete button' });
             }
         }
+        // Password row: its input must line up with the two above it, and the
+        // debug dot must be gone from the footer.
+        const homeUi = await cdp.eval(`
+            (() => {
+                $('#room-password-link').click();
+                const left = (sel) => {
+                    const el = document.querySelector(sel);
+                    return el ? Math.round(el.getBoundingClientRect().left) : null;
+                };
+                return {
+                    userLeft: left('#user-id'),
+                    roomLeft: left('#room-id'),
+                    pwLeft: left('#room-password'),
+                    pwDisplay: getComputedStyle(document.querySelector('#room-password-container')).display,
+                    debugButton: !!document.querySelector('#debug-button'),
+                    wall: (() => {
+                        const b = getComputedStyle(document.body, '::before');
+                        const a = getComputedStyle(document.body, '::after');
+                        return {
+                            img: /background-wall/.test(b.backgroundImage),
+                            repeat: b.backgroundRepeat,
+                            size: b.backgroundSize,
+                            opacity: b.opacity,
+                            fixed: b.position,
+                            // The wall must be the only backdrop here.
+                            dragonLeft: /dragon\\.png/.test(b.backgroundImage + a.backgroundImage),
+                            secondLayer: /url\\(/.test(a.backgroundImage)
+                        };
+                    })()
+                };
+            })()`);
+        if (homeUi) {
+            log('  · home: ' + JSON.stringify(homeUi));
+            if (homeUi.pwLeft !== homeUi.userLeft || homeUi.pwLeft !== homeUi.roomLeft) {
+                problems.push({ kind: 'layout', text: 'the password input is not aligned with the ones above: ' + JSON.stringify(homeUi) });
+            }
+            if (homeUi.pwDisplay !== 'flex') {
+                problems.push({ kind: 'layout', text: 'the password row is not a flex row (' + homeUi.pwDisplay + ')' });
+            }
+            if (homeUi.debugButton) {
+                problems.push({ kind: 'layout', text: 'the debug button is still in the footer' });
+            }
+            const wall = homeUi.wall || {};
+            if (wall.dragonLeft) {
+                problems.push({ kind: 'layout', text: 'the dragon backdrop still shows under the wall' });
+            }
+            if (wall.secondLayer) {
+                problems.push({ kind: 'layout', text: 'a second backdrop layer competes with the wall' });
+            }
+            if (!wall.img) {
+                problems.push({ kind: 'layout', text: 'the dungeon wall backdrop is missing' });
+            } else {
+                if (!/repeat-x/.test(wall.repeat)) {
+                    problems.push({ kind: 'layout', text: 'the wall backdrop does not tile horizontally (' + wall.repeat + ')' });
+                }
+                if (wall.position !== 'fixed' && wall.fixed !== 'fixed') {
+                    problems.push({ kind: 'layout', text: 'the wall backdrop scrolls with the page' });
+                }
+                const op = parseFloat(wall.opacity);
+                if (!(op > 0 && op < 0.35)) {
+                    problems.push({ kind: 'layout', text: 'the wall backdrop opacity is off (' + wall.opacity + ')' });
+                }
+            }
+        }
         await shoot(cdp, '00-home-history');
+        await setViewport(cdp, VIEWPORTS[1]);
+        await sleep(300);
+        await shoot(cdp, '00-home-mobile');
+        await setViewport(cdp, VIEWPORTS[0]);
+        await sleep(300);
         // Deleting one row must leave the others alone.
         const afterDel = await cdp.eval(`
             (() => {
@@ -308,7 +377,8 @@ async function run() {
             (() => {
                 const read = () => ({
                     facts: [...document.querySelectorAll('#wr-difficulty-facts li')].map(li => li.textContent.trim()),
-                    itemsDisabled: document.querySelector('#wr-items').disabled
+                    itemsDisabled: document.querySelector('#wr-items').disabled,
+                    extraDisabled: document.querySelector('#wr-extra-events').disabled
                 });
                 return new Promise(resolve => {
                     const out = { buttons: [...document.querySelectorAll('.diff-btn')].map(b => b.textContent.trim()) };
@@ -334,15 +404,42 @@ async function run() {
             if (!diffPanel.normal.facts.length) {
                 problems.push({ kind: 'lobby', text: 'the difficulty panel lists no concrete facts' });
             }
-            if (!diffPanel.easy.facts.some(f => /40 tuiles/.test(f)) ||
+            if (!diffPanel.easy.facts.some(f => /48 tuiles/.test(f)) ||
                 !diffPanel.easy.facts.some(f => /\+1 PV/.test(f))) {
-                problems.push({ kind: 'lobby', text: 'Facile does not advertise its 40 tiles / +1 HP: ' + JSON.stringify(diffPanel.easy.facts) });
+                problems.push({ kind: 'lobby', text: 'Facile does not advertise its 48 tiles / +1 HP: ' + JSON.stringify(diffPanel.easy.facts) });
             }
             if (!diffPanel.expert.itemsDisabled) {
                 problems.push({ kind: 'rules', text: 'the items checkbox stays enabled in Expert' });
             }
             if (diffPanel.normal.itemsDisabled) {
                 problems.push({ kind: 'lobby', text: 'the items checkbox is disabled in Normal' });
+            }
+            // The +3 cards concession is an official rule: offered everywhere.
+            if (diffPanel.expert.extraDisabled || diffPanel.normal.extraDisabled) {
+                problems.push({ kind: 'rules', text: 'the +3 events checkbox is not available at every difficulty' });
+            }
+        }
+
+        // Ticking the concession must move the advertised turn count.
+        const extraUi = await cdp.eval(`
+            (() => new Promise(resolve => {
+                const turns = () => (document.querySelector('#wr-difficulty-facts li') || {}).textContent || '';
+                const before = turns();
+                $('#wr-extra-events').prop('checked', true).trigger('change');
+                setTimeout(() => {
+                    const after = turns();
+                    const desc = (document.querySelector('#wr-extra-desc') || {}).textContent || '';
+                    $('#wr-extra-events').prop('checked', false).trigger('change');
+                    setTimeout(() => resolve({ before, after, desc }), 250);
+                }, 300);
+            }))()`);
+        if (extraUi) {
+            log('  · +3 events: ' + JSON.stringify(extraUi));
+            if (!/22 tours/.test(extraUi.before) || !/25 tours/.test(extraUi.after)) {
+                problems.push({ kind: 'lobby', text: 'the +3 events option does not update the turn count: ' + JSON.stringify(extraUi) });
+            }
+            if (!/\+3 tours/.test(extraUi.desc)) {
+                problems.push({ kind: 'lobby', text: 'the +3 events blurb does not state what it grants: ' + extraUi.desc });
             }
         }
 
@@ -357,6 +454,67 @@ async function run() {
         await cdp.waitFor("$('#wr-character-grid .char-card.mine').length === 4", '4 characters selected');
         await cdp.waitFor("!$('#start-btn').prop('disabled')", 'start button enabled');
         await shoot(cdp, '02-characters-selected');
+
+        // Difficulty buttons: one row, equal widths (desktop and phone alike).
+        const diffBtns = await cdp.eval(`
+            (() => {
+                const r = [...document.querySelectorAll('.diff-btn')].map(b => b.getBoundingClientRect());
+                return {
+                    count: r.length,
+                    rows: new Set(r.map(b => Math.round(b.top))).size,
+                    widths: [...new Set(r.map(b => Math.round(b.width)))]
+                };
+            })()`);
+        if (diffBtns) {
+            log('  · difficulty buttons: ' + JSON.stringify(diffBtns));
+            if (diffBtns.rows !== 1) {
+                problems.push({ kind: 'layout', text: 'the difficulty buttons span several rows' });
+            }
+            if (diffBtns.widths.length !== 1) {
+                problems.push({ kind: 'layout', text: 'the difficulty buttons have different widths: ' + JSON.stringify(diffBtns.widths) });
+            }
+        }
+
+        // Phone waiting room: settings folded, character grid actually reachable.
+        await setViewport(cdp, VIEWPORTS[1]);
+        await sleep(400);
+        const wrMobile = await cdp.eval(`
+            (() => {
+                const vis = (sel) => { const e = document.querySelector(sel); return !!(e && e.offsetParent); };
+                const box = (sel) => { const e = document.querySelector(sel); return e ? Math.round(e.getBoundingClientRect().height) : null; };
+                const out = {
+                    toggleShown: vis('#wr-settings-toggle'),
+                    settingsOpen: vis('#wr-settings'),
+                    recap: (document.querySelector('#wr-settings-recap') || {}).textContent || '',
+                    gridHeight: box('#wr-character-grid'),
+                    cardsVisible: [...document.querySelectorAll('.char-card')]
+                        .filter(c => c.getBoundingClientRect().top < window.innerHeight).length,
+                    diffRows: new Set([...document.querySelectorAll('.diff-btn')].map(b => Math.round(b.getBoundingClientRect().top))).size,
+                    diffWidths: [...new Set([...document.querySelectorAll('.diff-btn')].map(b => Math.round(b.getBoundingClientRect().width)))].length
+                };
+                document.querySelector('#wr-settings-toggle').click();
+                out.settingsAfterClick = vis('#wr-settings');
+                document.querySelector('#wr-settings-toggle').click();
+                return out;
+            })()`);
+        if (wrMobile) {
+            log('  · phone waiting room: ' + JSON.stringify(wrMobile));
+            if (!wrMobile.toggleShown) {
+                problems.push({ kind: 'layout', text: 'no settings toggle on the phone waiting room' });
+            }
+            if (wrMobile.settingsOpen) {
+                problems.push({ kind: 'layout', text: 'the phone settings block is not folded by default' });
+            }
+            if (!wrMobile.settingsAfterClick) {
+                problems.push({ kind: 'layout', text: 'the settings toggle does not open the block' });
+            }
+            if (!wrMobile.cardsVisible) {
+                problems.push({ kind: 'layout', text: 'no adventurer card is reachable on the phone waiting room' });
+            }
+        }
+        await shoot(cdp, '02-waiting-room-mobile');
+        await setViewport(cdp, VIEWPORTS[0]);
+        await sleep(400);
 
         // --- game ------------------------------------------------------------
         log('· starting the game');
@@ -523,6 +681,39 @@ async function run() {
         await sleep(900);
         await shoot(cdp, '22-hide-toast');
 
+        // Feedback weight: items / hiding / reaching the Exit get the small
+        // bottom toast; only a misfortune event may take the central one.
+        const toastUi = await cdp.eval(`
+            (() => {
+                const bigVisible = () => {
+                    const el = document.querySelector('#event-toast');
+                    return !!el && getComputedStyle(el).display !== 'none';
+                };
+                $('#event-toast').css('display', 'none');
+                $('#log-toast').empty();
+                ['potion', 'item-found', 'scroll-found', 'scroll-used', 'hide'].forEach(k => playFx({ kind: k, name: 'Test', item: 'potion', reason: 'r', total: 1, success: true, roll: 5 }));
+                const bigAfterItems = bigVisible();
+                pushLogToast('🧪 Test boit une Potion (+1 PV).');
+                pushLogToast('🏃 Test atteint la SORTIE, à l\\'abri du Donjon !');
+                const small = document.querySelectorAll('#log-toast .log-toast-line').length;
+                playFx({ kind: 'sudden-death', killed: ['Test'], survived: [] });
+                return { bigAfterItems, small, bigAfterEvent: bigVisible() };
+            })()`);
+        if (toastUi) {
+            log('  · toasts: ' + JSON.stringify(toastUi));
+            if (toastUi.bigAfterItems) {
+                problems.push({ kind: 'layout', text: 'items / hiding still raise the central toast' });
+            }
+            if (toastUi.small !== 2) {
+                problems.push({ kind: 'layout', text: 'the small bottom toasts did not render (' + toastUi.small + ')' });
+            }
+            if (!toastUi.bigAfterEvent) {
+                problems.push({ kind: 'layout', text: 'a misfortune event no longer raises the central toast' });
+            }
+        }
+        await sleep(300);
+        await shoot(cdp, '26-toasts');
+
         // Two states the engine can reach but a scripted solo run cannot reliably
         // produce, so drive the renderer directly and restore afterwards.
         //  (a) Shadow Hunter gone into the shadows: reappearing must REPLACE every
@@ -682,6 +873,10 @@ async function run() {
             (() => {
                 const img = document.querySelector('.tuto-optin-dragon');
                 const out = { cssLoaded: [...document.styleSheets].some(s => (s.href || '').includes('main.css')) };
+                // The lobby backdrops must not bleed into the board.
+                out.wallInGame = /background-wall/.test(
+                    getComputedStyle(document.body, '::before').backgroundImage +
+                    getComputedStyle(document.body, '::after').backgroundImage);
                 if (img) out.optinDragon = img.getBoundingClientRect().width;
                 out.oversized = [...document.querySelectorAll('img')]
                     .filter(el => el.getBoundingClientRect().width > 520)
@@ -693,6 +888,9 @@ async function run() {
             problems.push({ kind: 'layout', text: 'oversized image(s): ' + probe.oversized.join(', ') });
         }
         if (probe.overflowX) problems.push({ kind: 'layout', text: 'the page scrolls horizontally' });
+        if (probe.wallInGame) {
+            problems.push({ kind: 'layout', text: 'the lobby wall backdrop bleeds into the board' });
+        }
         log('· probes: ' + JSON.stringify(probe));
 
     } finally {

@@ -30,11 +30,17 @@ const ITEMS_DESC_ON =
     'Boule de feu : ils relèvent un aventurier inconscient, où qu\'il soit.';
 const ITEMS_DESC_OFF = 'Potions et Parchemins pour adoucir l\'exploration. Indisponible en difficulté Expert.';
 
+const EXTRA_DESC_OFF =
+    'Le livret de Sub Terra le propose : « si vous trouvez que c\'est toujours trop difficile, ' +
+    'vous pouvez ajouter 3 cartes à la pile Danger ». Rien d\'autre ne change.';
+
 /** Bullet list of what the chosen difficulty actually changes. */
 function difficultyFacts(info) {
     if (!info) return [];
+    const bonus = info.extraTurns
+        ? ' <span class="fact-bonus">(+' + info.extraTurns + ')</span>' : '';
     const facts = [
-        '<b>' + info.turns + ' tours</b> avant la mort subite',
+        '<b>' + info.turns + ' tours</b>' + bonus + ' avant la mort subite',
         'pioche de <b>' + info.tiles + ' tuiles</b> (la Sortie est parmi les 5 dernières)'
     ];
     if (info.bonusHp) facts.push('<b>+' + info.bonusHp + ' PV</b> pour chaque aventurier');
@@ -85,7 +91,14 @@ $(document).ready(() => {
     Lobby.$password = $('#room-password');
     Lobby.$submit = $('#lobby-btn');
     Lobby.$startBtn = $('#start-btn');
-    Lobby.$debugButton = $('#debug-button');
+
+    // Phone-only: fold the room settings away so the character grid gets the
+    // screen. The button is hidden by CSS on desktop, where nothing collapses.
+    $('#wr-settings-toggle').click(function () {
+        const open = !$('#wr-settings').hasClass('open');
+        $('#wr-settings').toggleClass('open', open);
+        $(this).toggleClass('open', open).attr('aria-expanded', open ? 'true' : 'false');
+    });
 
     // Local play history (this browser only).
     $('#history-clear').click(() => {
@@ -100,7 +113,9 @@ $(document).ready(() => {
 
     $('#room-password-link').click(() => {
         $('#room-password-link').hide();
-        $('#room-password-container').show();
+        // Explicit flex rather than .show(): jQuery would guess `block` and the
+        // padlock would lose the gap that lines the input up with the ones above.
+        $('#room-password-container').css('display', 'flex');
     });
 
     $('#user-id, #room-id, #room-password').on('input', function () { sanitize($(this)); });
@@ -144,6 +159,12 @@ $(document).ready(() => {
             enabled: $(this).is(':checked')
         });
     });
+    $('#wr-extra-events').on('change', function () {
+        Socket.emit('set-extra-events', {
+            roomId: Player.roomId, ownerId: Player.id, token: Player.token,
+            enabled: $(this).is(':checked')
+        });
+    });
 
     // Character selection.
     $('#wr-character-grid').on('click', '.char-card', function () {
@@ -165,7 +186,6 @@ $(document).ready(() => {
         Socket.emit('start-game', { roomId: Player.roomId, ownerId: Player.id, token: Player.token });
     });
 
-    Lobby.$debugButton.click(() => Socket.emit('debug-toggle'));
 
     // Kick / unselect from players list (owner only).
     $('#wr-players-list').on('click', '.kick-btn', function (e) {
@@ -390,6 +410,12 @@ Socket.on('players-list-changed', (room) => {
         $(this).prop('disabled', !isOwner);
     });
     $('#wr-difficulty-desc').text(DIFFICULTY_DESC[room.difficulty] || DIFFICULTY_DESC.normal);
+    // Recap on the collapsed settings button, so the folded state still tells
+    // the player what the room is set to.
+    const recap = [DIFF_LABEL[room.difficulty] || room.difficulty];
+    if (room.itemsEnabled) recap.push('objets');
+    if (room.extraEventsEnabled) recap.push('+3 tours');
+    $('#wr-settings-recap').text(recap.join(' · '));
     $('#wr-difficulty-facts').html(
         difficultyFacts(room.difficultyInfo).map(f => '<li>' + f + '</li>').join(''));
 
@@ -398,6 +424,17 @@ Socket.on('players-list-changed', (room) => {
     $('#wr-items').prop('checked', !!room.itemsEnabled).prop('disabled', !isOwner || !itemsAllowed);
     $('.items-optin').toggleClass('disabled', !itemsAllowed);
     $('#wr-items-desc').html(room.itemsEnabled ? ITEMS_DESC_ON : ITEMS_DESC_OFF);
+
+    // Rulebook concession: available everywhere, but Expert may only have room
+    // for part of it — so say what it actually grants here.
+    const info = room.difficultyInfo;
+    $('#wr-extra-events').prop('checked', !!room.extraEventsEnabled).prop('disabled', !isOwner);
+    $('#wr-extra-desc').html(room.extraEventsEnabled && info
+        ? 'Actif : <b>+' + info.extraTurns + ' tour' + (info.extraTurns > 1 ? 's' : '') + '</b>, ' +
+          'soit <b>' + info.turns + '</b> au total' +
+          (info.extraTurns < info.maxExtraTurns
+              ? ' — la pioche de cette difficulté ne peut pas en donner davantage.' : '.')
+        : EXTRA_DESC_OFF);
 
     // Character grid
     const $grid = $('#wr-character-grid').empty();
@@ -464,10 +501,6 @@ Socket.on('lobby-error', (error) => {
         'cannot-start': 'Conditions de lancement non remplies (4 à 6 personnages, chacun contrôlé).'
     };
     Dialog.openSimpleDialog(Dialog.$simpleDialog, '⛔ Erreur', M[error.type] || ('Erreur : ' + error.type));
-});
-
-Socket.on('debug-changed', (data) => {
-    Lobby.$debugButton.toggleClass('active', !!data.isDebugEnabled);
 });
 
 // Notify the server cleanly when leaving the page.

@@ -261,13 +261,15 @@ console.log('\n12. Difficulté Facile — pioche courte et +1 PV');
     };
     Game.initGame(room);
     const g = room.game;
-    ok('pioche de 40 tuiles (+ Sortie, - réserve)', g.deck.length === 40, 'deck=' + g.deck.length);
+    ok('pioche de 48 tuiles (+ Sortie, - réserve)', g.deck.length === 48, 'deck=' + g.deck.length);
     ok('la Sortie est dans la pioche', g.deck.some(t => t.kind === 'exit'));
     const exitIdx = g.deck.findIndex(t => t.kind === 'exit');
     ok('la Sortie est parmi les 5 dernières', exitIdx >= g.deck.length - 5, 'index=' + exitIdx + '/' + g.deck.length);
     ok('+1 PV pour tous', g.characters.every(c => c.hp === c.maxHp && c.maxHp >= 4),
         g.characters.map(c => c.maxHp).join(','));
-    ok('25 tours à 4 personnages', g.eventsTotal === 25, 'tours=' + g.eventsTotal);
+    // Facile keeps the rulebook's Normal tempo: what it shortens is the tile
+    // pile, not the clock. The +3 cards are the separate opt-in concession.
+    ok('22 tours à 4 personnages, comme en Normal', g.eventsTotal === 22, 'tours=' + g.eventsTotal);
 }
 
 // --- 13. Items: potions, scrolls, expert lockout ---------------------------
@@ -379,6 +381,124 @@ console.log('\n13. Objets — potions, parchemins, exclusion en Expert');
         if (t.item) break;
     }
     ok('aucun objet quand la variante est éteinte', g.itemsEnabled === false && g.scrolls === 0);
+}
+
+// --- 14. The rulebook's +3 Danger cards concession -------------------------
+console.log('\n14. Renfort de temps — +3 événements fâcheux (règle optionnelle)');
+{
+    const Events = require(path.join(ROOT, 'server', 'events.js'));
+    ok('Facile suit désormais le tempo de Normal',
+        Events.getEventCount(4, 'easy', 0) === Events.getEventCount(4, 'normal', 0),
+        Events.getEventCount(4, 'easy', 0) + ' vs ' + Events.getEventCount(4, 'normal', 0));
+    ok('+3 en Normal à 4 personnages : 22 → 25', Events.getEventCount(4, 'normal', 3) === 25,
+        String(Events.getEventCount(4, 'normal', 3)));
+    ok('+3 en Avancé à 6 personnages : 15 → 18', Events.getEventCount(6, 'advanced', 3) === 18,
+        String(Events.getEventCount(6, 'advanced', 3)));
+    // Expert with 4 adventurers uses 18 of a 20-card pool: only +2 fits.
+    ok('Expert à 4 personnages est plafonné par la pioche (20)',
+        Events.getEventCount(4, 'expert', 3) === 20, String(Events.getEventCount(4, 'expert', 3)));
+    ok('jamais plus de cartes que la pioche n\'en contient',
+        ['easy', 'normal', 'advanced', 'expert'].every(d =>
+            [4, 5, 6].every(n => Events.getEventCount(n, d, 3) <= Events.poolSize(d))));
+
+    const mk = (difficulty, extra) => {
+        const room = {
+            users: [{ id: 'U', isRobot: false }],
+            selectedCharacters: ['gnome', 'bard', 'druid', 'paladin'].map(id => ({ charId: id, ownerId: 'U' })),
+            difficulty, extraEventsEnabled: extra
+        };
+        Game.initGame(room);
+        return room.game;
+    };
+    ok('la pioche réelle gagne bien 3 cartes',
+        mk('normal', true).eventsTotal - mk('normal', false).eventsTotal === 3);
+    ok('aucune carte en double dans la pioche renforcée', (() => {
+        const g = mk('normal', true);
+        return new Set(g.eventDeck.map(c => c.uid)).size === g.eventDeck.length;
+    })());
+    ok('les cartes « x2 » restent exclues en Normal renforcé',
+        mk('normal', true).eventDeck.every(c => !c.doubled));
+    ok('Facile renforcé retrouve 25 tours', mk('easy', true).eventsTotal === 25,
+        String(mk('easy', true).eventsTotal));
+
+    // The lobby blurb must report what is really granted, not what was asked.
+    const info = Game.getDifficultyInfo('expert', 4, true);
+    ok('l\'info lobby annonce le vrai gain en Expert',
+        info.extraTurns === 2 && info.turns === 20, JSON.stringify(info));
+    const infoNormal = Game.getDifficultyInfo('normal', 4, true);
+    ok('et le gain complet ailleurs',
+        infoNormal.extraTurns === 3 && infoNormal.turns === 25, JSON.stringify(infoNormal));
+
+    // Toggling is free and independent of the items variant.
+    const room = { users: [], selectedCharacters: [], difficulty: 'expert' };
+    Game.initLobbyData(room);
+    ok('désactivé par défaut', room.extraEventsEnabled === false);
+    ok('activable même en Expert', Game.setExtraEvents(room, true).ok && room.extraEventsEnabled === true);
+}
+
+// --- 15. Feedback weight: journal lines vs central toasts ------------------
+console.log('\n15. Retours visuels — petits toasts pour les objets, gros pour les événements');
+{
+    const room = {
+        users: [{ id: 'U', isRobot: false }],
+        selectedCharacters: ['gnome', 'bard', 'druid', 'paladin'].map(id => ({ charId: id, ownerId: 'U' })),
+        difficulty: 'normal', itemsEnabled: true
+    };
+    Game.initGame(room);
+    const g = room.game;
+    const logged = [];
+    g.log.push = function (...a) { logged.push(...a); return Array.prototype.push.apply(this, a); };
+    const fxKinds = () => Game.buildState(room).fx.map(f => f.kind);
+
+    // Drinking a potion and reading a scroll must leave a journal line (which the
+    // client turns into a small bottom toast) and NO central-toast payload.
+    const c = active(g);
+    c.hp = 1;
+    g.board['-1,0'] = { uid: 960, kind: 'simple', shape: 'corridor', exits: [0, 2], row: -1, col: 0, state: 'normal', item: 'potion' };
+    act(room, 'move', { dir: 0 });
+    ok('la potion bue est journalisée', logged.some(l => /boit une Potion/.test(l)));
+    ok('aucun fx central pour la potion', !fxKinds().includes('potion'), fxKinds().join(','));
+
+    const victim = g.characters.find(x => x.id !== c.id);
+    victim.hp = 0; victim.conscious = false;
+    g.scrolls = 1;
+    Game.applyAction(room, 'U', 'use-scroll', { targetId: victim.id });
+    ok('le parchemin lu est journalisé', logged.some(l => /Un Parchemin est lu/.test(l)));
+    ok('aucun fx central pour le parchemin', !fxKinds().includes('scroll-used'), fxKinds().join(','));
+
+    // Hiding is a dice roll, not a misfortune: journal only.
+    g.ap = 2;
+    act(room, 'hide', {});
+    ok('la tentative de dissimulation est journalisée',
+        logged.some(l => /se cache|échoue à se cacher/.test(l)));
+    ok('aucun fx central pour la dissimulation', !fxKinds().includes('hide'), fxKinds().join(','));
+
+    // Reaching the Exit must announce itself.
+    g.board['-2,0'] = { uid: 999, kind: 'exit', shape: 'deadend', exits: [2], row: -2, col: 0, state: 'normal' };
+    const runner = g.characters.find(x => x.conscious && x.row === -1 && x.col === 0) || c;
+    runner.row = -1; runner.col = 0;
+    g.activeId = runner.id; g.ap = 2;
+    const before = logged.length;
+    act(room, 'move', { dir: 0 });
+    ok('atteindre la SORTIE est annoncé dans le journal',
+        logged.slice(before).some(l => /atteint la SORTIE/.test(l)),
+        logged.slice(before).join(' | '));
+    ok('mais sans gros toast central', !fxKinds().includes('exit'), fxKinds().join(','));
+}
+{
+    // A misfortune event, on the other hand, keeps its central toast.
+    const room = {
+        users: [{ id: 'U', isRobot: false }],
+        selectedCharacters: ['gnome', 'bard', 'druid', 'paladin'].map(id => ({ charId: id, ownerId: 'U' })),
+        difficulty: 'normal'
+    };
+    Game.initGame(room);
+    const g = room.game;
+    g.eventDeck = [];               // next event phase triggers sudden death
+    let guard = 0;
+    while (g.queue.length && guard++ < 20) act(room, 'end-turn');
+    const kinds = Game.buildState(room).fx.map(f => f.kind);
+    ok('la mort subite garde son toast central', kinds.includes('sudden-death'), kinds.join(','));
 }
 
 console.log('\n' + (fail === 0 ? '✅ ' : '❌ ') + pass + ' assertions OK, ' + fail + ' échec(s)\n');

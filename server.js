@@ -32,7 +32,6 @@ const USER_INPUT_REGEX = /^[a-zA-Z0-9\s\-_À-ÿ]{1,20}$/;
 
 const SOCKETS = {};
 const ROOMS = {};
-const SERVER = { isDebugEnabled: false };
 
 // ---------------------------------------------------------------------------
 // HTTP
@@ -88,7 +87,9 @@ function emitPlayerListChanged(room) {
         password: room.password,
         difficulty: room.difficulty,
         itemsEnabled: !!room.itemsEnabled,
-        difficultyInfo: Game.getDifficultyInfo(room.difficulty, room.selectedCharacters.length),
+        extraEventsEnabled: !!room.extraEventsEnabled,
+        difficultyInfo: Game.getDifficultyInfo(
+            room.difficulty, room.selectedCharacters.length, room.extraEventsEnabled),
         users: room.users.map(u => ({ id: u.id, isConnected: u.isConnected })),
         catalog: Game.getCharacterCatalog(),
         selectedCharacters: room.selectedCharacters,
@@ -136,17 +137,11 @@ function endGameByTimeout(roomId) {
     destroyRoom(roomId);
 }
 
-function logDebug(...message) {
-    if (console && SERVER.isDebugEnabled) console.log.apply(console, message);
-}
-
 // ---------------------------------------------------------------------------
 // Socket.IO
 // ---------------------------------------------------------------------------
 
 io.on('connection', (Socket) => {
-    Socket.emit('debug-changed', { isDebugEnabled: SERVER.isDebugEnabled });
-
     Socket.on('get-rooms-list', () => {
         Socket.emit('rooms-status-changed', { roomsList: getRoomList() });
     });
@@ -258,6 +253,13 @@ io.on('connection', (Socket) => {
         requireOwner(data, (room) => {
             const res = Game.setItemsEnabled(room, data.enabled);
             if (!res.ok) Socket.emit('lobby-error', { type: res.error });
+            emitPlayerListChanged(room);
+        });
+    });
+
+    Socket.on('set-extra-events', (data) => {
+        requireOwner(data, (room) => {
+            Game.setExtraEvents(room, data.enabled);
             emitPlayerListChanged(room);
         });
     });
@@ -378,11 +380,6 @@ io.on('connection', (Socket) => {
     Socket.on('disconnect', () => {
         const data = SOCKETS[Socket.id];
         if (data) handleDisconnect(data, Socket);
-    });
-
-    Socket.on('debug-toggle', () => {
-        SERVER.isDebugEnabled = !SERVER.isDebugEnabled;
-        io.emit('debug-changed', { isDebugEnabled: SERVER.isDebugEnabled });
     });
 });
 

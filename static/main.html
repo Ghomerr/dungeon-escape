@@ -101,6 +101,15 @@
                         <ol id="wr-players-list" class="players-list-ol"></ol>
                         <div id="wr-password-info" class="hint" style="display:none;"></div>
 
+                        <!-- Collapsed into a single button on phones (see CSS), so the
+                             character grid is not pushed off the screen. -->
+                        <button type="button" id="wr-settings-toggle" class="wr-settings-toggle" aria-expanded="false">
+                            <i class="fas fa-sliders"></i>
+                            <span class="wst-label">Paramètres de la partie</span>
+                            <span class="wst-recap" id="wr-settings-recap"></span>
+                            <i class="fas fa-chevron-down wst-chev"></i>
+                        </button>
+                        <div id="wr-settings" class="wr-settings">
                         <div class="difficulty-block">
                             <h3>Difficulté</h3>
                             <div id="wr-difficulty" class="difficulty-options">
@@ -119,6 +128,15 @@
                                     <span>Ajouter des <b>objets</b> dans le Donjon</span>
                                 </label>
                                 <p id="wr-items-desc" class="hint"></p>
+                            </div>
+
+                            <!-- Rulebook concession: +3 Danger cards, room-wide. -->
+                            <div class="items-optin">
+                                <label for="wr-extra-events">
+                                    <input type="checkbox" id="wr-extra-events" />
+                                    <span>Jouer avec <b>3 événements fâcheux en plus</b></span>
+                                </label>
+                                <p id="wr-extra-desc" class="hint"></p>
                             </div>
                         </div>
 
@@ -141,6 +159,7 @@
                             <button class="emoji-send" data-emoji="🐉">🐉</button>
                             <button class="emoji-send" data-emoji="❤️">❤️</button>
                         </div>
+                        </div><!-- /#wr-settings -->
 
                         <form name="lobby-form" id="start-content" action="" method="get">
                             <input type="hidden" id="formRoomId" name="formRoomId" />
@@ -171,7 +190,6 @@
     </main>
 
     <footer id="footer" class="icon-footer">
-        <span id="debug-button" title="Debug"></span>
         <span class="foot-ico"><i class="fas fa-dragon"></i></span>
         <span class="foot-ico version" id="version-link" title="Voir le changelog"><i class="fas fa-circle-info"></i><span class="lbl"> Dungeon Escape <span id="version-tag"></span></span></span>
         <span class="foot-ico music" id="audio-control" title="Musique"><i class="fas fa-volume-xmark"></i><span class="lbl"> Musique</span></span>

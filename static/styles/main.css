@@ -76,15 +76,23 @@ main {
     gap: 20px;
     position: relative;
 }
-/* Home screen only: the full dragon illustration as a faded backdrop behind
-   the connection zone (kept subtle so the form stays readable). */
+/* Home screen and waiting room: a dungeon wall tiled across the width, well
+   faded so it stays a texture and never fights the panels for attention. Sized
+   to the viewport height and repeated on X only, so the stones keep their
+   natural scale whatever the screen, and fixed so it does not scroll.
+   The shipped tile is a halved, re-encoded JPEG (75 kB) of the master in
+   static/assets/raws/background.png (1.8 MB, borderless so it tiles seamlessly)
+   — at 13 % opacity a lossless master would cost 24x the bytes for nothing.
+   This is the ONLY backdrop on these screens: a dragon illustration used to sit
+   on top of it, and two competing images at low opacity read as visual noise. */
 body.dungeon-escape:not(.in-game)::before {
     content: '';
     position: fixed;
     inset: 0;
     z-index: -1;
-    background: url('../assets/adventurers/dragon.png') no-repeat center 58% / min(680px, 92vw) auto;
-    opacity: .16;
+    background: url('../assets/background-wall.jpg') repeat-x center top;
+    background-size: auto 100%;
+    opacity: .13;
     pointer-events: none;
 }
 
@@ -121,6 +129,9 @@ body.dungeon-escape:not(.in-game)::before {
 }
 .fixed-size { width: 18px; text-align: center; color: var(--gold); }
 .private-room-container { margin: 10px 0; }
+/* The password row is not a .field, so it needs the same icon gap to line its
+   input up with the pseudonym and room-name inputs above it. */
+#room-password-container { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 #room-password-link { cursor: pointer; color: var(--muted); }
 #room-password-link:hover { color: var(--gold); }
 .button-container { margin-top: 14px; }
@@ -198,6 +209,25 @@ button.primary:hover:not(:disabled) { background: linear-gradient(to bottom, #e0
     }
     body.in-lobby-room .difficulty-block { margin-top: 6px; }
     body.in-lobby-room .difficulty-desc { margin-top: 3px; min-height: 0; font-size: .74rem; }
+    body.in-lobby-room .diff-btn { font-size: .82rem; padding: 7px 2px; }
+
+    /* The settings had grown enough to fill the whole viewport, leaving no room
+       for the character grid. On phones they fold behind one button, and open
+       into their own scroll area capped at half the screen. */
+    body.in-lobby-room .wr-settings-toggle {
+        display: flex; align-items: center; gap: 8px; width: 100%;
+        margin: 8px 0 0; padding: 9px 11px; text-align: left;
+        background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+        color: var(--gold-light); font-size: .85rem;
+    }
+    body.in-lobby-room .wst-recap { margin-left: auto; color: var(--muted); font-size: .76rem; }
+    body.in-lobby-room .wst-chev { transition: transform .18s; flex: 0 0 auto; }
+    body.in-lobby-room .wr-settings-toggle.open .wst-chev { transform: rotate(180deg); }
+    body.in-lobby-room .wr-settings { display: none; }
+    body.in-lobby-room .wr-settings.open {
+        display: block; max-height: 50vh; overflow-y: auto;
+        margin-top: 6px; padding-right: 4px;
+    }
     body.in-lobby-room .emoji-bar { margin: 6px 0; }
     body.in-lobby-room .players-list-ol { margin-bottom: 4px; }
     body.in-lobby-room .players-list-ol li { padding: 5px 9px; margin-bottom: 4px; }
@@ -246,9 +276,14 @@ button.primary:hover:not(:disabled) { background: linear-gradient(to bottom, #e0
 .kick-btn { cursor: pointer; }
 
 .difficulty-block { margin-top: 14px; }
-.difficulty-options { display: flex; gap: 8px; flex-wrap: wrap; }
+/* One row, four buttons of equal width whatever their label length. */
+.difficulty-options { display: flex; gap: 8px; }
+.diff-btn { flex: 1 1 0; min-width: 0; padding: 8px 4px; text-align: center; white-space: nowrap; }
 .difficulty-desc { margin-top: 8px; min-height: 2.4em; }
 .diff-btn.active { background: linear-gradient(to bottom, #c79a47, #9c7327); color: #1c1208; font-weight: bold; }
+
+/* Settings block: always open on desktop, folded behind a button on phones. */
+.wr-settings-toggle { display: none; }
 
 /* What the chosen difficulty concretely changes — numbers, not adjectives. */
 .difficulty-facts {
@@ -256,6 +291,7 @@ button.primary:hover:not(:disabled) { background: linear-gradient(to bottom, #e0
     font-size: .78rem; color: var(--muted); line-height: 1.5;
 }
 .difficulty-facts b { color: var(--gold-light); }
+.fact-bonus { color: #8fe08f; font-weight: bold; }
 
 /* Items variant opt-in (waiting room) — room-wide, set by the owner. */
 .items-optin {
@@ -335,8 +371,11 @@ button.primary:hover:not(:disabled) { background: linear-gradient(to bottom, #e0
 .hist-del:hover { color: #ff9c86; background: #ffffff10; }
 
 @media (max-width: 780px) {
-    .hist-row { grid-template-columns: 1fr 1fr 28px; }
-    .hist-row .hist-del { position: absolute; top: 6px; right: 6px; }
+    /* Two real columns: the delete button floats in the reserved right gutter
+       instead of eating a grid track and squeezing the team cell. */
+    .hist-row { grid-template-columns: 1fr 1fr; padding-right: 30px; }
+    .hist-row .hist-del { position: absolute; top: 4px; right: 2px; }
+    .hist-team .hist-sub { white-space: nowrap; }
 }
 
 .emoji-bar { margin: 14px 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
@@ -407,11 +446,6 @@ footer {
 .icon-footer .foot-ico:hover, .icon-footer .foot-ico a:hover { color: var(--gold-light); background: #ffffff10; }
 .icon-footer .foot-ico.rules a:hover { text-decoration: none; }
 
-#debug-button {
-    width: 12px; height: 12px; border-radius: 50%;
-    background: #444; display: inline-block; cursor: pointer;
-}
-#debug-button.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
 
 /* ---- Overlays ---- */
 .overlay {

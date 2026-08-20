@@ -19,9 +19,10 @@ const DRAGON_RANGE = 7;
 const DRAGON_PATH = { ignoreDoors: true };
 
 const DIFFICULTIES = ['easy', 'normal', 'advanced', 'expert'];
-// "Facile" trims the exploration pile: the Exit tile is what gates a run, and
-// 40 tiles is roughly two thirds of the way to it.
-const EASY_DECK_SIZE = 40;
+// "Facile" trims the exploration pile: the Exit tile is what gates a run. 40
+// tiles turned out to make it a walk (won on the first try), so 48 keeps the
+// mode clearly winnable without putting it in a different game from Normal.
+const EASY_DECK_SIZE = 48;
 const EASY_BONUS_HP = 1;
 
 // Optional "objets" variant. Probabilities, not "one in N", so a certainty can
@@ -42,7 +43,8 @@ const GAME_STATUS = { PLAYING: 'PLAYING', WON: 'WON', LOST: 'LOST' };
 function initLobbyData(room) {
     room.selectedCharacters = []; // [{ charId, ownerId }]
     room.difficulty = 'normal';
-    room.itemsEnabled = false;    // optional Potions & Parchemins variant
+    room.itemsEnabled = false;       // optional Potions & Parchemins variant
+    room.extraEventsEnabled = false; // rulebook concession: +3 Danger cards
 }
 
 function humansCount(room) {
@@ -103,17 +105,33 @@ function setItemsEnabled(room, enabled) {
 }
 
 /**
- * What a difficulty actually changes, for the lobby blurb. `count` is the
+ * The rulebook's own concession: 3 more Danger cards, hence 3 more turns. It
+ * changes nothing else, so it is offered at every difficulty — including
+ * Expert, where the pile may only have room for two of them.
+ */
+function setExtraEvents(room, enabled) {
+    room.extraEventsEnabled = !!enabled;
+    return { ok: true };
+}
+
+/**
+ * What the chosen setup actually changes, for the lobby blurb. `count` is the
  * number of selected adventurers (the turn budget depends on it).
  */
-function getDifficultyInfo(difficulty, count) {
+function getDifficultyInfo(difficulty, count, extraEnabled) {
     const n = Math.max(4, Math.min(6, count || 4));
+    const extra = extraEnabled ? Events.EXTRA_EVENTS : 0;
+    const base = Events.getEventCount(n, difficulty, 0);
+    const turns = Events.getEventCount(n, difficulty, extra);
     return {
         id: difficulty,
         label: difficultyLabel(difficulty),
-        turns: Events.getEventCount(n, difficulty),
+        turns,
+        baseTurns: base,
+        extraTurns: turns - base,       // what the concession really grants here
+        maxExtraTurns: Events.EXTRA_EVENTS,
         tiles: difficulty === 'easy' ? EASY_DECK_SIZE : 64,
-        bonusHp: difficulty === 'easy' ? 1 : 0,
+        bonusHp: difficulty === 'easy' ? EASY_BONUS_HP : 0,
         doubled: difficulty === 'advanced' || difficulty === 'expert',
         allowsItems: difficulty !== 'expert'
     };
@@ -177,7 +195,9 @@ function initGame(room) {
     // Order characters by level (lowest first) as a stable, fair default.
     characters.sort((a, b) => a.level - b.level);
 
-    const eventDeck = Events.buildEventDeckForGame(characters.length, room.difficulty, Utils.shuffle);
+    const extraEvents = room.extraEventsEnabled ? Events.EXTRA_EVENTS : 0;
+    const eventDeck = Events.buildEventDeckForGame(
+        characters.length, room.difficulty, Utils.shuffle, extraEvents);
 
     room.game = {
         status: GAME_STATUS.PLAYING,
@@ -222,6 +242,14 @@ function initGame(room) {
     if (easy) {
         pushLog(room, '🍀 Mode Facile : pioche réduite à ' + EASY_DECK_SIZE +
             ' tuiles et +' + EASY_BONUS_HP + ' PV pour chaque aventurier.');
+    }
+    if (extraEvents) {
+        // Report what the pile could actually give, not what was asked for:
+        // Expert with 4 adventurers only has room for two of the three cards.
+        const granted = room.game.eventsTotal -
+            Events.getEventCount(characters.length, room.difficulty, 0);
+        pushLog(room, '⏳ Renfort de temps : ' + granted + ' tour' + (granted > 1 ? 's' : '') +
+            ' de plus (règle optionnelle du livret).');
     }
     if (room.game.itemsEnabled) {
         pushLog(room, '🎁 Objets activés : des Potions se cachent dans le Donjon, ' +
@@ -442,7 +470,6 @@ function maybeDropPotion(room, tile) {
     tile.item = 'potion';
     g.potionsFound++;
     pushLog(room, '🧪 Une Potion scintille sur la tuile fraîchement révélée.');
-    pushFx(room, { kind: 'item-found', item: 'potion', row: tile.row, col: tile.col });
 }
 
 /** Cleaning the dungeon up sometimes yields a Parchemin. */
@@ -453,7 +480,6 @@ function grantScroll(room, probability, reason) {
     g.scrolls++;
     g.scrollsFound++;
     pushLog(room, '📜 ' + reason + ' — un Parchemin est récupéré (' + g.scrolls + ' en réserve).');
-    pushFx(room, { kind: 'scroll-found', reason, total: g.scrolls });
     return true;
 }
 
@@ -470,7 +496,6 @@ function takeTileItem(room, char, tile) {
         tile.item = null;
         healChar(room, char, 1);
         pushLog(room, '🧪 ' + char.name + ' boit une Potion (+1 PV).');
-        pushFx(room, { kind: 'potion', charId: char.id, name: char.name });
     } else if (tile.item === 'scroll') {
         tile.item = null;
         g.scrolls++;
@@ -493,7 +518,6 @@ function doUseScroll(room, char, payload) {
     healChar(room, target, 1);
     pushLog(room, '📜 Un Parchemin est lu : ' + target.name + ' revient à lui ! (' +
         g.scrolls + ' restant(s))');
-    pushFx(room, { kind: 'scroll-used', charId: target.id, name: target.name });
     return { ok: true };
 }
 
@@ -1005,7 +1029,6 @@ function doShadowReturn(room, char, payload) {
     g.ap = 0;
     enterTile(room, char, dest);
     pushLog(room, '🌒 ' + char.name + ' resurgit de l\'ombre.');
-    pushFx(room, { kind: 'shadow-in', charId: char.id, name: char.name });
     if (!checkGameEnd(room)) endTurn(room);
     return { ok: true };
 }
@@ -1028,7 +1051,6 @@ function doHide(room, char, payload) {
     } else {
         pushLog(room, '👀 ' + char.name + ' échoue à se cacher (dé ' + roll.value + ').');
     }
-    pushFx(room, { kind: 'hide', charId: char.id, name: char.name, success, auto, roll: roll.value });
     return { ok: true };
 }
 
@@ -1165,8 +1187,7 @@ function doAbility(room, char, payload) {
             char.shadowOut = true;
             char.hidden = false;         // off the board entirely, no need to hide
             pushLog(room, '🌑 ' + char.name + ' se fond dans l\'ombre et disparaît du Donjon.');
-            pushFx(room, { kind: 'shadow-out', charId: char.id, name: char.name });
-            endTurn(room);               // nothing else can be done while gone
+                endTurn(room);               // nothing else can be done while gone
             return { ok: true };
         }
         default:
@@ -1625,6 +1646,7 @@ module.exports = {
     removeSelection,
     setDifficulty,
     setItemsEnabled,
+    setExtraEvents,
     getDifficultyInfo,
     DIFFICULTIES,
     getCanStartGame,

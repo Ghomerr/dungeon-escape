@@ -53,17 +53,17 @@ Le **Donjon** comporte un maximu de 3 **Dragons**.
 
 4. Choisir un niveau de difficulté : **Facile**, **Normal**, **Avancé** ou **Expert**. Le nombre d'**Événements fâcheux** dépend de cette difficulté.
 
-Le mode **Facile** est un aménagement maison, en dehors des règles de base : la pioche d'exploration est réduite à **40 tuiles** (la **Sortie** reste mélangée parmi les 5 dernières), chaque **aventurier** démarre avec **1 point de vie supplémentaire**, et la pioche d'**Événements fâcheux** compte **3 cartes de plus** qu'en **Normal**.
+Le mode **Facile** est un aménagement maison, en dehors des règles de base : la pioche d'exploration est réduite à **48 tuiles** (la **Sortie** reste mélangée parmi les 5 dernières) et chaque **aventurier** démarre avec **1 point de vie supplémentaire**. Le nombre de tours, lui, reste celui du mode **Normal** : pour en gagner, il faut cocher l'option **« 3 événements fâcheux en plus »** ci-dessous.
 
 5. Mélanger les **Événements fâcheux** restants en fonction du tableau suivant : 
 
-| Nombre de personnages | Normal | Avancé | Expert | 
-| --- | --- | --- | --- |
-| 4 personnages | 22 événements fâcheux | 20 événements fâcheux | 18 événements fâcheux |
-| 5 personnages | 19 événements fâcheux | 17 événements fâcheux | 15 événements fâcheux | 
-| 6 personnages | 17 événements fâcheux | 15 événements fâcheux | 13 événements fâcheux |
+| Nombre de personnages | Facile | Normal | Avancé | Expert |
+| --- | --- | --- | --- | --- |
+| 4 personnages | 22 événements fâcheux | 22 événements fâcheux | 20 événements fâcheux | 18 événements fâcheux |
+| 5 personnages | 19 événements fâcheux | 19 événements fâcheux | 17 événements fâcheux | 15 événements fâcheux |
+| 6 personnages | 17 événements fâcheux | 17 événements fâcheux | 15 événements fâcheux | 13 événements fâcheux |
 
-En difficulté **Facile** : 25 événements à 4 personnages, 22 à 5 personnages, 20 à 6 personnages.
+Le mode **Facile** partage volontairement le tempo du mode **Normal** : ce qui l'allège, c'est la pioche plus courte et le point de vie supplémentaire, pas le temps. Avec l'option **« 3 événements fâcheux en plus »**, chaque colonne gagne 3 événements — dans la limite des cartes disponibles à cette difficulté (en **Expert** à 4 personnages, la pioche plafonne à 20, soit 2 de plus seulement).
 
 Les **Événements fâcheux** restants sont écartés de la partie.
 

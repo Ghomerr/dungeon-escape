@@ -301,12 +301,12 @@ bot identique dans toutes les cellules (`tools/sim/matrix.js 400`).
 
 | Difficulté | Objets | Persos | Victoires | Or | Argent | Bronze | Sortis (moy.) | Sortis si victoire | Tours | Sortie trouvée |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Facile | non | 4 | **24,5 %** | 9 | 27 | 62 | 1,06 | 2,46 / 4 | 24,6 | 80,8 % |
-| Facile | non | 5 | **21,5 %** | 6 | 30 | 50 | 1,48 | 3,49 / 5 | 23,4 | 89,3 % |
-| Facile | non | 6 | **18,0 %** | 18 | 23 | 31 | 2,06 | 4,82 / 6 | 22,3 | 93,3 % |
-| Facile | **oui** | 4 | **54,0 %** | 49 | 75 | 92 | 1,82 | 2,80 / 4 | 25,8 | 91,0 % |
-| Facile | **oui** | 5 | **47,0 %** | 58 | 61 | 69 | 2,44 | 3,94 / 5 | 23,3 | 96,5 % |
-| Facile | **oui** | 6 | **41,5 %** | 56 | 62 | 48 | 3,06 | 5,05 / 6 | 22,1 | 98,3 % |
+| Facile | non | 4 | **16,0 %** | 2 | 10 | 52 | 0,83 | 2,22 / 4 | 22,1 | 66,8 % |
+| Facile | non | 5 | **8,5 %** | 3 | 11 | 20 | 1,11 | 3,50 / 5 | 21,3 | 82,5 % |
+| Facile | non | 6 | **10,0 %** | 2 | 8 | 30 | 1,54 | 4,30 / 6 | 19,9 | 87,8 % |
+| Facile | **oui** | 4 | **35,0 %** | 16 | 46 | 78 | 1,38 | 2,56 / 4 | 24,0 | 88,3 % |
+| Facile | **oui** | 5 | **29,8 %** | 21 | 41 | 57 | 1,89 | 3,70 / 5 | 21,8 | 94,5 % |
+| Facile | **oui** | 6 | **21,5 %** | 9 | 26 | 51 | 2,20 | 4,51 / 6 | 20,4 | 95,0 % |
 | Normal | non | 4 | 2,8 % | 0 | 1 | 10 | 0,27 | 2,09 / 4 | 19,8 | 24,8 % |
 | Normal | non | 5 | 0,8 % | 0 | 1 | 2 | 0,38 | 3,33 / 5 | 19,5 | 34,8 % |
 | Normal | non | 6 | 0,8 % | 0 | 1 | 2 | 0,53 | 4,33 / 6 | 18,9 | 46,0 % |
@@ -331,17 +331,20 @@ bot identique dans toutes les cellules (`tools/sim/matrix.js 400`).
 | --- | --- |
 | Référence (Normal, sans objets) | 2,8 % |
 | Objets seuls | 9,3 % (**× 3,3**) |
-| Facile seul | 24,5 % (**× 8,8**) |
-| Facile **et** objets | **54,0 %** (**× 19**) |
+| Facile seul | 16,0 % (**× 5,7**) |
+| Facile **et** objets | **35,0 %** (**× 12,5**) |
 
 - **Facile** attaque la cause racine identifiée au §2 : la pioche passe de 62 à
-  ~38 tuiles à piocher, et la Sortie est trouvée dans 81 % des parties au lieu
-  de 25 %.
+  ~46 tuiles à piocher, et la Sortie est trouvée dans 67 % des parties au lieu
+  de 25 %. Elle était à 40 tuiles au départ, ce qui rendait le mode gagnable du
+  premier coup : 48 le remet une marche au-dessus de Normal plutôt que dans un
+  autre jeu.
 - **Les objets** attaquent la spirale d'usure du §3. Ils valent environ une
   demi-marche de difficulté partout où ils sont autorisés, et à eux seuls ils
   font plus que tripler les chances en Normal.
-- **Combinés**, ils placent le mode Facile à 4 personnages à **54 %** — soit
-  exactement le « 1 sur 2 » du jeu de plateau réel.
+- **Combinés** (et avec les 3 tours optionnels), ils placent le mode Facile à
+  4 personnages à **39 %** : nettement gagnable, sans atteindre le « 1 sur 2 »
+  du plateau réel, que seul un joueur meilleur que ce bot devrait décrocher.
 
 ### Fréquences retenues
 

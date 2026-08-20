@@ -864,36 +864,15 @@ function processFx(state) {
     });
 }
 
+/**
+ * The big central toast is reserved for **misfortune events** (and sudden
+ * death): it stops the eye, and that is exactly what a Danger card deserves.
+ * Everything else — items found or used, hiding attempts, an adventurer
+ * reaching the Exit — already slides in as a small journal toast at the bottom
+ * (see pushLogToast), which is the right weight for it.
+ */
 function playFx(fx) {
     switch (fx.kind) {
-        case 'item-found':
-            showBigToast({
-                color: '#2c4d5e', iconHtml: '<span class="toast-icon">' + (fx.item === 'scroll' ? '📜' : '🧪') + '</span>',
-                label: (fx.item === 'scroll' ? 'Un Parchemin' : 'Une Potion') + ' brille dans le Donjon',
-                sub: 'Le premier aventurier sur la tuile la ramasse', ms: 2200
-            });
-            break;
-        case 'potion':
-            showBigToast({
-                color: '#2c5e3a', iconHtml: '<span class="toast-icon">🧪</span>',
-                label: escapeHtml(fx.name) + ' boit une Potion',
-                sub: '+1 point de vie', ms: 2200
-            });
-            break;
-        case 'scroll-found':
-            showBigToast({
-                color: '#5a4a14', iconHtml: '<span class="toast-icon">📜</span>',
-                label: 'Un Parchemin est trouvé !',
-                sub: escapeHtml(fx.reason) + ' — ' + fx.total + ' en réserve', ms: 2600
-            });
-            break;
-        case 'scroll-used':
-            showBigToast({
-                color: '#2c5e3a', iconHtml: '<span class="toast-icon">📜</span>',
-                label: escapeHtml(fx.name) + ' revient à lui !',
-                sub: 'Un Parchemin a été lu', ms: 2600
-            });
-            break;
         case 'scroll-offer': {
             // Somebody just dropped and the team holds Parchemins. Only the
             // player controlling the fallen adventurer is asked.
@@ -909,20 +888,6 @@ function playFx(fx) {
                 'Garder', null);
             break;
         }
-        case 'hide':
-            showBigToast(fx.success ? {
-                // 🙈 rather than 🫥 : the latter is a blank box on Windows 10.
-                color: '#2f2f5e', iconHtml: '<span class="toast-icon">🙈</span>',
-                label: escapeHtml(fx.name) + ' se cache !',
-                sub: fx.auto ? 'Réussite automatique (3e essai)' : 'Jet de talent réussi (dé ' + fx.roll + ')',
-                ms: 2600
-            } : {
-                color: '#7a3a12', iconHtml: '<span class="toast-icon">👀</span>',
-                label: escapeHtml(fx.name) + ' reste visible',
-                sub: 'Échec de la dissimulation (dé ' + fx.roll + ')',
-                ms: 2600
-            });
-            break;
         case 'sudden-death': {
             const lines = [];
             if (fx.killed && fx.killed.length) lines.push('💀 Dévorés : ' + escapeHtml(fx.killed.join(', ')));

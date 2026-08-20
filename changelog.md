@@ -1,9 +1,112 @@
 # Changelog
 
 All notable changes to Dungeon Escape are documented here.
-Versions use a calendar scheme: `vYYYY.MM.DD`.
 
-## v2026.08.19
+Versions follow **semantic versioning** — `vMAJOR.MINOR.PATCH` — followed by the
+date the version was cut, for example `## v1.0.0 — 2026-08-19`.
+
+Everything below `v1.0.0` predates that scheme: those releases were named after
+the day they shipped, and are kept under a `v0.` prefix (`v0.2026.08.19`).
+
+## v1.0.0 — 2026-08-19
+
+First stable release. The game is rule-complete against the **Sub Terra**
+rulebook, it has a difficulty ladder that actually spans from "finishable" to
+"brutal", and every rule it implements is covered by an assertion suite.
+
+From here on, versions follow semantic versioning. Everything before this entry
+shipped under the old calendar naming and is filed under `v0.`.
+
+### Added
+- **Optional "+3 événements fâcheux"**, a checkbox beside the items one. It deals
+  three more Danger cards, hence three more turns, and changes nothing else —
+  this is the concession the rulebook offers verbatim: *« si vous trouvez que
+  c'est toujours trop difficile, vous pouvez ajouter 3 cartes à la pile
+  Danger »*. Available at **every** difficulty, Expert included.
+  - The lobby states what it really grants, because the pile can run out: Expert
+    with 4 adventurers only holds 20 cards for an 18-card game, so it gets +2
+    and says so rather than promising three.
+  - Measured at 4 adventurers: on its own it is worth almost nothing (Normal
+    2.8 % → 2.5 %, inside the noise), but **combined with the items** it lands
+    hard — Normal 9.3 % → **14.8 %**, Avancé 7.5 % → **11.0 %**. Extra turns only
+    pay off once the party survives long enough to spend them, which is exactly
+    what the audit predicted.
+
+### Changed
+- **The big central toast is now reserved for misfortune events** (sudden death
+  included). Finding or drinking a Potion, finding or reading a Parchemin, and
+  hiding attempts used to interrupt the screen with the same full-size
+  announcement as a Danger card, which flattened the difference between "you
+  picked up a flask" and "the dungeon is flooding". They all now settle for the
+  small journal toast that slides in at the bottom — the weight already used for
+  dice rolls — which they were raising anyway. Reaching the Exit gets one too.
+  The prompt offering to spend a Parchemin on a fallen adventurer is untouched:
+  that one is a decision, not a notification.
+- **A dungeon wall behind the home screen and the character selection**, in
+  place of the dragon illustration. The torch-lit stonework tiles across the
+  width, sized to the viewport height so the stones keep their scale on any
+  screen, and stays fixed while the page scrolls — held at 13 % opacity so it
+  reads as texture rather than decoration competing with the panels. It is now
+  the **only** backdrop there: the dragon used to show through underneath, and
+  two faded illustrations stacked on each other read as noise. Neither ever
+  bleeds into the board, the rule being scoped to `:not(.in-game)`.
+  - The shipped tile is a halved, re-encoded JPEG of **75 kB**; the borderless
+    1.8 MB master lives in the gitignored `static/assets/raws/`, next to the
+    other source artwork. At 13 % opacity a lossless master would have cost 24×
+    the bytes for no visible gain.
+- **The waiting room fits on a phone again.** The room settings had grown to the
+  point of filling the whole viewport, pushing "Choix des personnages" off the
+  bottom with no way to reach it. On phones they now fold behind a single
+  **Paramètres de la partie** button that carries a recap of the current setup
+  (`Normal · objets · +3 tours`), so the state is readable while collapsed;
+  opening it gives the block its own scroll area capped at half the screen. The
+  players list, the recap button and **Lancer la partie** stay visible at all
+  times, and the character grid gets the rest of the height. Desktop is
+  untouched: nothing collapses there.
+- **The four difficulty buttons sit on one row, all the same width**, instead of
+  sizing themselves to their labels and wrapping "Expert" onto a second line.
+- **The difficulty table in the rules now has a Facile column**, and spells out
+  that Facile deliberately shares Normal's tempo — plus what the +3 option adds
+  to each column, including the cap that limits Expert to +2 with 4 adventurers.
+- **Home screen polish.** The password row now lines its input up with the
+  pseudonym and room-name fields above it — the padlock was missing the icon gap
+  because that row is not a `.field`. The history rows drop their empty grid
+  column on narrow screens, which stops the team cell from being squeezed into a
+  vertical stack.
+- **The footer debug dot is gone.** It toggled a server-side `logDebug` that was
+  never called anywhere — the whole facility (button, CSS, socket events and
+  function) was dead code.
+- **Facile no longer bundles the extra turns.** It keeps the rulebook's Normal
+  tempo (22 / 19 / 17 turns); what makes it easier is the shorter tile pile and
+  the bonus hit point. The +3 cards are now a separate, explicit choice, so the
+  two levers can be dialled independently — and Facile can reach 25 turns by
+  ticking the box.
+- **Facile is less of a walk: 48 tiles instead of 40.** A first playthrough was
+  won on the very first attempt in 16 minutes, which put the mode in a different
+  game from the others rather than one notch below. At 48 tiles it drops from
+  24.5 % to **16.0 %** wins on its own, and from 52 % to **35 %** with items —
+  still clearly finishable, still recognisably the same dungeon.
+- **Versioning scheme.** Releases are `vMAJOR.MINOR.PATCH` followed by their
+  date. The previous calendar-named releases are preserved under a `v0.` prefix.
+
+### Difficulty reference at 4 adventurers
+
+Win rates measured on 400 simulated games per cell, random rosters
+(`tools/sim/extra-events.js`):
+
+| Difficulté | Objets | +3 tours | Victoires |
+| --- | --- | --- | ---: |
+| Facile | oui | oui | **39.0 %** |
+| Facile | oui | non | 35.0 % |
+| Facile | non | non | 16.0 % |
+| Normal | oui | oui | **14.8 %** |
+| Normal | oui | non | 9.3 % |
+| Normal | non | non | 2.8 % |
+| Avancé | oui | oui | 11.0 % |
+| Avancé | non | non | 1.5 % |
+| Expert | — | non | 0.3 % |
+
+## v0.2026.08.19
 
 ### Added
 - **Your last 10 games, on the home screen.** Every finished run is now written
@@ -44,7 +147,7 @@ Versions use a calendar scheme: `vYYYY.MM.DD`.
   before Facile existed fell back to Normal's text for both. The service worker
   cache is bumped so the update actually lands.
 
-## v2026.08.18
+## v0.2026.08.18
 
 Every rule below was checked against the original **Sub Terra** rulebook (the
 game this one is based on), not just against `rules.md`. Net effect: the game got
@@ -162,7 +265,7 @@ it for players who want a run they can actually finish.
 - **`tools/sim/RAPPORT-AUDIT.md` §8** records that recap, so the effect of a
   future balance change can be read against a known baseline.
 
-## v2026.08.17
+## v0.2026.08.17
 
 ### Tooling
 - **Headless game simulator** (`tools/sim/`): runs the real engine
@@ -193,7 +296,7 @@ it for players who want a run they can actually finish.
   the bot (it never uses the Paladin's Sacrifice, the Fireball or the Bard's
   Inspiration), so future numbers stay comparable.
 
-## v2026.08.09
+## v0.2026.08.09
 
 ### Added
 - **Guided tour ("didacticiel")**: **Poppy**, the dungeon's baby dragon, walks a
@@ -297,7 +400,7 @@ it for players who want a run they can actually finish.
   The three bugs fixed above were all found by this harness rather than by
   reading the diff.
 
-## v2026.08.07
+## v0.2026.08.07
 
 ### Added
 - **Board targeting instead of modals**: actions that used to ask for coordinates
@@ -341,7 +444,7 @@ it for players who want a run they can actually finish.
   action / adventurer rails lay their round buttons out on two columns, which
   roughly halves their height and keeps the "end turn" button in view.
 
-## v2026.07.26
+## v0.2026.07.26
 
 ### Added
 - **Installable PWA**: Dungeon Escape can now be installed to the home screen /
@@ -388,7 +491,7 @@ it for players who want a run they can actually finish.
   the page instead of scrolling internally, which made their tops unreachable.
 - **Emoji button** no longer opens an invisible empty zone at the bottom.
 
-## v2026.07.22
+## v0.2026.07.22
 
 ### Added
 - **Background music**: the dungeon theme now starts automatically on the lobby
@@ -446,7 +549,7 @@ it for players who want a run they can actually finish.
   no longer baked in — it is generated as standalone overlays
   (`decor-*.png`) and drawn upright over the tile, whatever its rotation.
 
-## v2026.07.20
+## v0.2026.07.20
 
 ### Added
 - **Dangerous-move confirmation**: moving onto a tile that would cost the
@@ -468,7 +571,7 @@ it for players who want a run they can actually finish.
   Dragon now correctly drops to 0 PV and falls **unconscious** (previously nothing
   happened). The Gnome's stealth still exempts it.
 
-## v2026.07.14
+## v0.2026.07.14
 
 ### Added
 - **Action-point aura**: the active adventurer's aura now reflects their action
@@ -509,7 +612,7 @@ it for players who want a run they can actually finish.
 - **Exploration modal**: orientation buttons are now a uniform size.
 - **Window title**: removed the emoji next to the active adventurer's name.
 
-## v2026.07.11
+## v0.2026.07.11
 
 ### Fixed
 - **Tile orientation**: elbow tiles `corner-3` and `corner-4` were drawn in the
@@ -569,7 +672,7 @@ it for players who want a run they can actually finish.
 ### Changed
 - All source-code comments are now in English.
 
-## v2026.07.05
+## v0.2026.07.05
 
 ### Added
 - **Complete tile art set**: procedurally generated PNGs for every dungeon tile
@@ -582,14 +685,14 @@ it for players who want a run they can actually finish.
   druid, dwarf, elf-rogue, gnome, paladin, pyromancer, shadow-hunter) plus a
   combined reference sheet, used as the board pawns.
 
-## v2026.06.23
+## v0.2026.06.23
 
 ### Added
 - **Tile-generation pipeline**: documented art-generation prompts
   (`prompts_generation_tuiles.md`) and a reference asset, laying the groundwork
   for the procedural tile set.
 
-## v2026.06.17
+## v0.2026.06.17
 
 ### Added
 - **First playable build** — real-time multiplayer over Socket.IO.
@@ -604,7 +707,7 @@ it for players who want a run they can actually finish.
 - **Game client**: dungeon board rendering, party panel, action buttons, event
   log, and the direction / placement / choice dialogs.
 
-## v2026.06.16 (pre-release — documentation & rules)
+## v0.2026.06.16 (pre-release — documentation & rules)
 
 ### Added
 - **Project scaffolding**: LICENSE, README and the Node package manifest.
