@@ -8,6 +8,47 @@ date the version was cut, for example `## v1.0.0 — 2026-08-19`.
 Everything below `v1.0.0` predates that scheme: those releases were named after
 the day they shipped, and are kept under a `v0.` prefix (`v0.2026.08.19`).
 
+## v1.1.0 — 2026-09-28
+
+### Added
+- **Adventurers and dragons walk the board as sprites** instead of round
+  portrait pawns. Each one now shows which way it is going:
+  - **Standing still**, a figure faces down when the game starts, then keeps
+    facing the direction of its last move, so a glance at the board tells who
+    came from where.
+  - **Moving**, it turns toward its destination and plays a walk cycle
+    (step, stand, other step) for the whole one-second slide between tiles.
+  - A **ring in the player's colour** at each adventurer's feet replaces the
+    coloured pawn border, and carries every highlight the pawn used to: the
+    blinking white / red aura of the active adventurer, the green halo of a
+    legal target, the green glow of an adventurer safe on the Exit. The dragon
+    gets a pulsing red ring.
+  - **Crowded tiles** (four tokens or more) shrink everyone on them, so feet
+    and rings never get clipped at the bottom of the tile.
+  - **Sizes tell the races apart**: the gnome stands at 65 % of a human, the
+    dwarf at 75 %, and the dragon towers at 125 %. Only the drawing scales —
+    feet, ring and the room taken on the tile stay put.
+- **Consistency first**: a figure never changes outfit, colour or held item
+  from one frame to the next. The front and back steps are the very same
+  drawing with one foot lifted; the side views reuse hand-made frames, with
+  the items they were missing (the paladin's shield, the dwarf's book, the
+  elf's keys) pasted back from the front view.
+
+### Tooling
+- **`tools/sprites/`**, a self-contained pipeline (its own `package.json`, so
+  the game's dependencies are untouched): `npm run all` cuts the hand-made
+  sheets of `static/assets/raws/` into figures, pastes the missing items listed
+  in `overlays.json`, and assembles `static/assets/sprites/<id>.png` — 3 frames
+  (idle, step, step) × 4 directions — from the frames chosen in `picks.json`.
+  `generate.js` can also ask Eden AI for fresh frames (paid, needs
+  `EDEN_API_KEY`).
+- **`tools/devcheck.js` checks the sprites**: face down before moving, turn and
+  walk during a move, stand still facing the new way afterwards, the dragon
+  drawn as a sprite, and a crowded tile that keeps every token in view.
+  `--gallery` stages all eight adventurers around a dragon, each facing another
+  way, and screenshots them idle, mid-walk and after the step;
+  `--gallery=gnome,dwarf,paladin` stages only those.
+
 ## v1.0.0 — 2026-08-19
 
 First stable release. The game is rule-complete against the **Sub Terra**

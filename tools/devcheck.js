@@ -12,6 +12,7 @@
  *   node tools/devcheck.js [--keep] [--out DIR] [--url URL] [--tutorial|--no-tutorial]
  *
  *   --keep            leave the server running on exit (it was started here)
+ *   --gallery[=ids]   stage the sprites of every (or the listed) adventurers
  *   --out DIR         screenshot directory (default: tools/.devcheck)
  *   --url URL         target a running instance instead of booting one
  *   --no-tutorial     dismiss the guided tour before shooting the board
@@ -857,6 +858,128 @@ async function run() {
                 problems.push({ kind: 'layout', text: 'an adventurer on the Exit tile is not marked as safe' });
             }
         }
+
+        // Board sprites: an adventurer faces down until it moves, turns toward
+        // its move, walks during the slide, then stays turned. A fake tile to the
+        // right of the active adventurer (and a dragon on it) stages the move.
+        await cdp.eval("$('#event-toast, #log-toast').css('visibility', 'hidden'); true");
+        const zoom = async (name) => {
+            const r = await cdp.eval(`(() => { const b = document.querySelector('#board').getBoundingClientRect();
+                return { x: b.left - 20, y: b.top - 20, w: b.width + 40, h: b.height + 40 }; })()`);
+            const { data } = await cdp.send('Page.captureScreenshot', {
+                format: 'png', clip: { x: r.x, y: r.y, width: r.w, height: r.h, scale: 2.5 }
+            });
+            fs.writeFileSync(path.join(OUT, name + '.png'), Buffer.from(data, 'base64'));
+            log('  → ' + path.relative(ROOT, path.join(OUT, name + '.png')));
+        };
+        await cdp.eval("render(Game.state); true");
+        const spriteBefore = await cdp.eval(`
+            (() => {
+                const el = document.querySelector('#board .char-token.tok-active');
+                return el ? { cls: el.className, sprite: getComputedStyle(el, '::after').backgroundImage } : null;
+            })()`);
+        await cdp.eval(`
+            (() => {
+                const st = Game.state;
+                const ac = st.characters.find(c => c.id === st.activeId);
+                const here = st.board[ac.row + ',' + ac.col] || Object.values(st.board).find(t => t.row === ac.row && t.col === ac.col);
+                window.__spriteUndo = { pos: st.characters.map(c => [c.row, c.col]), board: st.board, dragons: st.dragons };
+                const nt = Object.assign({}, here, { col: here.col + 1, kind: 'simple' });
+                st.board = Object.assign({}, st.board, { [nt.row + ',' + nt.col]: nt });
+                st.dragons = [{ id: 99, row: here.row, col: here.col + 1 }];
+                render(st);
+                ac.col += 1;
+                render(st);
+                return true;
+            })()`);
+        await sleep(300);
+        const spriteMid = await cdp.eval(`(() => { const el = document.querySelector('#board .char-token.tok-active');
+            return { cls: el.className, anim: getComputedStyle(el, '::after').animationName }; })()`);
+        await zoom('27-sprites-walking');
+        await sleep(1100);
+        await cdp.eval("render(Game.state); true");
+        const spriteAfter = await cdp.eval(`(() => { const el = document.querySelector('#board .char-token.tok-active');
+            return { cls: el.className, anim: getComputedStyle(el, '::after').animationName,
+                     dragon: !!document.querySelector('#board .dragon-token.sprite-token') }; })()`);
+        await zoom('27-sprites-idle');
+        // Everyone on the dragon's tile: the crowded layout must keep all feet in view.
+        const crowd = await cdp.eval(`(() => { const st = Game.state, ac = st.characters.find(c => c.id === st.activeId);
+            Game._tokenPos = {};
+            st.characters.forEach(c => { c.row = ac.row; c.col = ac.col; }); render(st);
+            const tile = document.querySelector('#board .tile-crowded');
+            if (!tile) return null;
+            const tb = tile.getBoundingClientRect();
+            return { tokens: tile.querySelectorAll('.sprite-token').length,
+                     cut: [...tile.querySelectorAll('.sprite-token')].filter(el => el.getBoundingClientRect().bottom > tb.bottom + 1).length };
+        })()`);
+        await zoom('27-sprites-crowded');
+        if (!crowd || crowd.cut) problems.push({ kind: 'sprites', text: 'a crowded tile cuts tokens off: ' + JSON.stringify(crowd) });
+        log('  · sprites: ' + JSON.stringify({ spriteBefore, spriteMid, spriteAfter }));
+        if (!spriteBefore || !/dir-down/.test(spriteBefore.cls) || !/sprites\//.test(spriteBefore.sprite)) {
+            problems.push({ kind: 'sprites', text: 'the active adventurer is not a down-facing sprite before moving: ' + JSON.stringify(spriteBefore) });
+        }
+        if (!/dir-right/.test(spriteMid.cls) || !/walking/.test(spriteMid.cls) || spriteMid.anim !== 'sprite-walk') {
+            problems.push({ kind: 'sprites', text: 'a move to the right does not turn and walk the sprite: ' + JSON.stringify(spriteMid) });
+        }
+        if (!/dir-right/.test(spriteAfter.cls) || /walking/.test(spriteAfter.cls) || spriteAfter.anim !== 'none') {
+            problems.push({ kind: 'sprites', text: 'after the move the sprite does not stand still facing right: ' + JSON.stringify(spriteAfter) });
+        }
+        if (!spriteAfter.dragon) problems.push({ kind: 'sprites', text: 'the dragon is not drawn as a sprite' });
+
+        // --gallery[=id,id…] : the adventurers (all of them by default) on a 5x5
+        // fake dungeon, each facing another way, the dragon in the middle; then
+        // everyone takes one step (shot mid-walk) and stands still in its new
+        // direction. Visual review only.
+        const galleryArg = args.find(a => a === '--gallery' || a.startsWith('--gallery='));
+        if (galleryArg) {
+            const only = galleryArg.includes('=') ? galleryArg.split('=')[1].split(',') : null;
+            const stage = await cdp.eval(`((only) => {
+                const st = Game.state, ac = st.characters.find(c => c.id === st.activeId);
+                const here = Object.values(st.board).find(t => t.row === ac.row && t.col === ac.col);
+                window.__galleryUndo = { chars: st.characters, activeId: st.activeId };
+                const r0 = here.row - 2, c0 = here.col - 2, board = {};
+                for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+                    board[(r0 + r) + ',' + (c0 + c)] = Object.assign({}, here, { row: r0 + r, col: c0 + c, kind: 'simple', uid: r * 5 + c });
+                }
+                st.board = board;
+                st.dragons = [{ id: 98, row: r0 + 2, col: c0 + 2 }];
+                const COLORS = { 'shadow-hunter': '#6d4c91', gnome: '#3f8f5b', dwarf: '#b5651d', pyromancer: '#d9472b',
+                    'elf-rogue': '#2e9e8f', druid: '#7cae3a', paladin: '#c9a227', bard: '#4a7fd6' };
+                const ids = only || Object.keys(COLORS);
+                // A few characters: spread out on the corners, apart from each other.
+                const ring = ids.length <= 4 ? [[1,1],[1,3],[3,3],[3,1]] : [[1,1],[1,2],[1,3],[2,3],[3,3],[3,2],[3,1],[2,1]];
+                const dirs = ['down', 'left', 'right', 'up'];
+                const tpl = st.characters[0];
+                st.characters = ids.map((id, i) => Object.assign({}, tpl, {
+                    id, name: id, color: COLORS[id], row: r0 + ring[i][0], col: c0 + ring[i][1],
+                    conscious: true, hidden: false, escaped: false, dead: false, shadowOut: false }));
+                st.activeId = ids.includes('paladin') ? 'paladin' : ids[0];
+                Game._tokenDir = {}; Game._tokenPos = {};
+                st.characters.forEach((c, i) => { Game._tokenDir['c' + c.id] = dirs[i % 4]; });
+                render(st);
+                return st.characters.map((c, i) => c.id + ':' + dirs[i % 4]);
+            })(${JSON.stringify(only)})`);
+            log('  · gallery: ' + stage.join(' '));
+            await sleep(400);
+            await zoom('28-gallery-idle');
+            await shoot(cdp, '28-gallery-desktop');
+            await cdp.eval(`(() => {
+                const st = Game.state, D = { down: [1, 0], up: [-1, 0], left: [0, -1], right: [0, 1] };
+                const dirs = ['right', 'down', 'up', 'left'];   // a different way than they face
+                st.characters.forEach((c, i) => { c.row += D[dirs[i % 4]][0]; c.col += D[dirs[i % 4]][1]; });
+                render(st); return true; })()`);
+            await sleep(350);
+            await zoom('28-gallery-walking');
+            await sleep(1100);
+            await cdp.eval("render(Game.state); true");
+            await zoom('28-gallery-after');
+            await cdp.eval(`(() => { const st = Game.state, u = window.__galleryUndo;
+                st.characters = u.chars; st.activeId = u.activeId; Game._tokenDir = {}; return true; })()`);
+        }
+
+        await cdp.eval(`(() => { const st = Game.state, u = window.__spriteUndo;
+            const ac = st.characters.find(c => c.id === st.activeId);
+            st.characters.forEach((c, i) => { c.row = u.pos[i][0]; c.col = u.pos[i][1]; }); Game._tokenPos = {}; st.board = u.board; st.dragons = u.dragons; render(st); return true; })()`);
 
         // Extra element shots requested on the command line (--shot name=selector).
         for (let i = 0; i < args.length; i++) {

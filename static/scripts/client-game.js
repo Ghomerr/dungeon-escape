@@ -116,6 +116,12 @@ function tileArt(t) {
 // <id>_portrait.png variant.
 function portraitUrl(id) { return 'static/assets/adventurers/' + id + '.png'; }
 function portraitCardUrl(id) { return 'static/assets/adventurers/' + id + '_portrait.png'; }
+// Board sprites: static/assets/sprites/<id>.png, 3 columns (idle, step A,
+// step B) x 4 rows (down, left, right, up). See .sprite-token in game.css.
+// Absolute: the url() travels in a CSS variable and would otherwise resolve
+// against game.css instead of the page.
+function spriteUrl(id) { return new URL('static/assets/sprites/' + id + '.png', document.baseURI).href; }
+const SPRITE_DIRS = ['down', 'left', 'right', 'up'];
 
 const EVENT_INFO = {
     fire: { icon: '🔥', desc: 'Un jet de dé désigne les tuiles inflammables qui prennent feu (-3 PV ; Pyromancien -1).' },
@@ -1336,13 +1342,22 @@ function pushLogToast(line) {
 }
 function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+// Direction a sprite token faces: 'down' until it first moves, then the
+// direction of its last move (kept across re-renders, keyed like _tokenPos).
+function tokenDir(key) { return (Game._tokenDir && Game._tokenDir[key]) || 'down'; }
+
 // Slide a token from its previous cell to its new one (~1s) so the move is
-// visible. `key` identifies the token (character or dragon).
+// visible. `key` identifies the token (character or dragon). Sprite tokens turn
+// toward the move and play their walk cycle for the duration of the slide.
 function animateIfMoved($tok, $tile, key, row, col, prevPos, curPos) {
     curPos[key] = { row, col };
     const prev = prevPos[key];
     if (!prev || (prev.row === row && prev.col === col)) return;
     const dr = prev.row - row, dc = prev.col - col;
+    const dir = Math.abs(dc) >= Math.abs(dr) ? (dc < 0 ? 'right' : 'left') : (dr < 0 ? 'down' : 'up');
+    (Game._tokenDir = Game._tokenDir || {})[key] = dir;
+    SPRITE_DIRS.forEach(d => $tok.removeClass('dir-' + d));
+    $tok.addClass('dir-' + dir + ' walking');
     const el = $tok[0], tileEl = $tile[0];
     // Start from the previous cell; let the token overflow the tile during the slide.
     el.style.transition = 'none';
@@ -1357,6 +1372,7 @@ function animateIfMoved($tok, $tile, key, row, col, prevPos, curPos) {
     setTimeout(() => {
         el.style.transition = ''; el.style.transform = ''; el.style.zIndex = '';
         tileEl.style.overflow = ''; tileEl.style.zIndex = '';
+        el.classList.remove('walking');
     }, 1100);
 }
 
@@ -1442,9 +1458,12 @@ function renderBoard(state) {
 
     keys.forEach(k => {
         const t = board[k];
+        const here = (o) => o.row === t.row && o.col === t.col;
+        const crowded = state.dragons.filter(here).length +
+            state.characters.filter(c => !c.dead && !c.shadowOut && here(c)).length >= 4;
         const $tile = $('<div></div>')
             .addClass('tile kind-' + t.kind + ' state-' + t.state + (t.doorLocked ? ' door-locked' : '') +
-                (moveCls[k] ? ' ' + moveCls[k] : ''))
+                (moveCls[k] ? ' ' + moveCls[k] : '') + (crowded ? ' tile-crowded' : ''))
             .css({ top: (t.row - minR) * CELL + 'px', left: (t.col - minC) * CELL + 'px', width: CELL + 'px', height: CELL + 'px' })
             .attr('title', tileFullLabel(t));
 
@@ -1498,7 +1517,8 @@ function renderBoard(state) {
         }
 
         state.dragons.filter(d => d.row === t.row && d.col === t.col).forEach(d => {
-            const $tok = $('<span class="token dragon-token" style="background-image:url(' + portraitCardUrl('dragon') + ')"></span>');
+            const $tok = $('<span class="token dragon-token sprite-token dir-' + tokenDir('d' + d.id) +
+                '" style="--sprite:url(' + spriteUrl('dragon') + ')" title="Dragon"></span>');
             $tile.append($tok);
             animateIfMoved($tok, $tile, 'd' + d.id, d.row, d.col, prevPos, curPos);
         });
@@ -1520,8 +1540,8 @@ function renderBoard(state) {
                 if (state.effortUsed) activeCls += ' aura-overreach';
                 if (state.ap <= 0) activeCls += ' aura-empty';
             }
-            const $tok = $('<span class="token char-token' + koCls + activeCls + (asTarget ? ' tok-target' : '') +
-                '" data-cid="' + c.id + '" style="background-image:url(' + portraitCardUrl(c.id) + ');border-color:' + c.color +
+            const $tok = $('<span class="token char-token sprite-token dir-' + tokenDir('c' + c.id) + koCls + activeCls + (asTarget ? ' tok-target' : '') +
+                '" data-cid="' + c.id + '" style="--sprite:url(' + spriteUrl(c.id) + ');--pc:' + c.color +
                 '" title="' + c.name + ' (' + c.hp + '/' + c.maxHp + ')' + (c.hidden ? ' — caché' : '') + '"></span>');
             if (asTarget) $tok.on('click', (e) => { e.stopPropagation(); resolveTarget(asTarget.onPick); });
             $tile.append($tok);

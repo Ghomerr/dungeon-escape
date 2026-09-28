@@ -1,0 +1,17 @@
+{
+    "name": "dungeon-escape-sprites",
+    "private": true,
+    "description": "Board sprite sheets pipeline: static/assets/raws -> static/assets/sprites (segment, paste missing items, build). Kept apart from the game dependencies.",
+    "scripts": {
+        "all": "node segment.js && node overlay.js && node build.js",
+        "segment": "node segment.js",
+        "overlay": "node overlay.js",
+        "build": "node build.js",
+        "contact": "node contact.js",
+        "grid": "node grid.js",
+        "generate": "node generate.js"
+    },
+    "dependencies": {
+        "sharp": "^0.35.5"
+    }
+}
