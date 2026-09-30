@@ -327,13 +327,11 @@ function activateNext(room) {
 
     if (g.queue.length === 0) {
         // All characters have acted : dragon phase, then event phase.
-        runDragonPhase(room);
-        if (checkGameEnd(room)) return;
-        runEventPhase(room);
-        if (checkGameEnd(room)) return;
-        // End of turn : pass the first-player marker clockwise.
-        g.firstIndex = (g.firstIndex + 1) % g.order.length;
-        startRound(room);
+        g.activeId = null;
+        g.ap = 0;
+        g.freeMoves = 0;
+        g.freeMoveGrant = null;
+        driveSteps(room, endOfRoundSteps(room));
         return;
     }
 
@@ -554,6 +552,9 @@ function applyAction(room, userId, action, payload) {
         if (res.ok) checkGameEnd(room);
         return res;
     }
+
+    // Dragon / event phases play out on their own, step by step.
+    if (g.phase !== PHASE.ACTION) return { ok: false, error: 'phase-running' };
 
     const c = getChar(g, g.activeId);
     if (!c) return { ok: false, error: 'no-active' };
@@ -1271,12 +1272,13 @@ function knockOutCharsOnCell(room, row, col) {
 function moveOneDragon(room, dragon) {
     const g = room.game;
     const { target, distance } = nearestTarget(g, dragon);
+    g.dragonFocus = { id: dragon.id, targetId: target && distance <= DRAGON_RANGE ? target.id : null };
     if (!target || distance > DRAGON_RANGE) {
         // No targetable victim — whether because it is out of range or simply
         // hidden — so the dragon vanishes (it may come back later). A dragon
         // either has a victim and advances, or disappears; it never lingers.
         dragon.remove = true;
-        pushLog(room, '🐉 Un Dragon ne trouve plus de proie et disparaît.');
+        pushLog(room, '💨 Un dragon ne trouve plus de proie et disparaît du Donjon.');
         grantScroll(room, SCROLL_ON_LOST_DRAGON, 'Le Dragon parti, son antre se laisse fouiller');
         return;
     }
@@ -1285,27 +1287,92 @@ function moveOneDragon(room, dragon) {
         // The only way a targetable adventurer is at distance 0 is that we are
         // already sharing its tile (e.g. it walked onto the dragon). A dragon
         // never lingers idle next to a conscious victim — it terrasses it here.
+        pushLog(room, '🐉 Un dragon se jette sur ' + target.name + ' !');
         knockOutCharsOnCell(room, dragon.row, dragon.col);
         return;
     }
+    pushLog(room, '🐉 Un dragon se dirige vers ' + target.name + '...');
     const d = Tiles.DELTA[dir];
     dragon.row += d.row;
     dragon.col += d.col;
     knockOutCharsOnCell(room, dragon.row, dragon.col);
 }
 
-function runDragonPhase(room, times = 1, reason = 'phase') {
+// ---------------------------------------------------------------------------
+// End of round : Dragon phase, then bad-event phase, played step by step.
+//
+// Each step is a `yield <ms>` : the pause to leave AFTER it so the players can
+// watch it. The live server hands the room a pacer (room.pace) that waits that
+// long and re-broadcasts the state; without one (simulations, rule checks) the
+// steps simply run back to back, exactly like before.
+// ---------------------------------------------------------------------------
+
+const STEP_MS = {
+    intro: 1400,       // phase banner shown before anything moves
+    dragon: 1900,      // one dragon's move (the slide itself lasts 1s)
+    none: 1200,        // "no dragon in the dungeon"
+    card: 2800,        // the drawn Danger card, before its effects
+    effect: 1800,      // one application of a card's effect
+    outro: 2600        // results left on screen before the next round
+};
+
+function driveSteps(room, steps) {
     const g = room.game;
-    g.phase = PHASE.DRAGON;
-    if (g.dragons.length > 0) {
-        pushLog(room, reason === 'event'
-            ? '🐉 Événement Dragon : les dragons se déplacent' + (times > 1 ? ' ' + times + ' fois' : '') + '.'
-            : '🐉 Phase Dragon : les dragons se déplacent.');
+    const step = () => {
+        if (room.game !== g) return;         // the game was closed meanwhile
+        for (;;) {
+            const r = steps.next();
+            if (r.done) return;
+            if (room.pace) { room.pace(r.value, step); return; }
+        }
+    };
+    step();
+}
+
+function* endOfRoundSteps(room) {
+    const g = room.game;
+    yield* dragonPhaseSteps(room);
+    if (checkGameEnd(room)) return;
+    yield* eventPhaseSteps(room);
+    if (checkGameEnd(room)) return;
+    // End of turn : pass the first-player marker clockwise.
+    g.firstIndex = (g.firstIndex + 1) % g.order.length;
+    startRound(room);
+}
+
+/**
+ * Every dragon moves, one after the other. Called for the Dragon phase and by
+ * the Dragon bad event (`reason` = 'event', possibly twice for a x2 card).
+ */
+function* dragonPhaseSteps(room, times = 1, reason = 'phase') {
+    const g = room.game;
+    if (reason === 'phase') g.phase = PHASE.DRAGON;
+    if (g.dragons.length === 0) {
+        if (reason === 'phase') {
+            pushLog(room, '🐉 Phase Dragon : aucun dragon dans le Donjon.');
+            yield STEP_MS.none;
+        }
+        return;
     }
+    pushLog(room, reason === 'event'
+        ? '🐉 Événement Dragon : les dragons se déplacent' + (times > 1 ? ' ' + times + ' fois' : '') + '.'
+        : '🐉 Phase Dragon : ' + g.dragons.length + ' dragon' + (g.dragons.length > 1 ? 's se déplacent' : ' se déplace') + '.');
+    yield STEP_MS.intro;
     for (let t = 0; t < times; t++) {
-        for (const dragon of g.dragons) moveOneDragon(room, dragon);
-        g.dragons = g.dragons.filter(dr => !dr.remove);
+        const movers = g.dragons.slice();
+        for (let i = 0; i < movers.length; i++) {
+            g.dragonStep = { index: i + 1, total: movers.length, pass: t + 1, passes: times };
+            moveOneDragon(room, movers[i]);
+            yield STEP_MS.dragon;
+            // A dragon that gave up stays on screen during its own step (faded
+            // out by the client), and only leaves the board afterwards.
+            g.dragons = g.dragons.filter(dr => !dr.remove);
+            if (checkGameEnd(room)) break;
+        }
+        if (g.status !== GAME_STATUS.PLAYING) break;
     }
+    g.dragonFocus = null;
+    g.dragonStep = null;
     // NOTE: hidden adventurers stay hidden here — the flag is cleared at the
     // start of the next round (see startRound), so hiding also covers the bad
     // event phase that follows this one.
@@ -1313,7 +1380,10 @@ function runDragonPhase(room, times = 1, reason = 'phase') {
 
 function spawnDragon(room) {
     const g = room.game;
-    if (g.dragons.length >= MAX_DRAGONS) return;
+    if (g.dragons.length >= MAX_DRAGONS) {
+        pushLog(room, '🐲 Le Donjon compte déjà ' + MAX_DRAGONS + ' dragons : aucun nouveau n\'apparaît.');
+        return;
+    }
     // A lair is chosen by its distance to a potential VICTIM, so an adventurer
     // who is off the board (in the shadows) attracts nothing.
     const conscious = consciousInDungeon(g).filter(c => !c.shadowOut);
@@ -1332,9 +1402,15 @@ function spawnDragon(room) {
         }
     }
     if (bestLair && bestDist <= DRAGON_RANGE) {
-        g.dragons.push({ id: g.dragonSeq++, row: bestLair.row, col: bestLair.col });
-        pushLog(room, '🐲 Un Dragon surgit d\'un antre !');
+        const dragon = { id: g.dragonSeq++, row: bestLair.row, col: bestLair.col };
+        g.dragons.push(dragon);
+        g.dragonFocus = { id: dragon.id, targetId: null };
+        pushLog(room, '🐲 Un Dragon surgit d\'un antre, à ' + bestDist + ' tuile' + (bestDist > 1 ? 's' : '') +
+            ' de l\'aventurier le plus proche !');
         knockOutCharsOnCell(room, bestLair.row, bestLair.col);
+    } else {
+        pushLog(room, '🐲 Aucun antre de dragon à moins de ' + (DRAGON_RANGE + 1) +
+            ' tuiles d\'un aventurier : aucun dragon n\'apparaît.');
     }
 }
 
@@ -1342,7 +1418,7 @@ function spawnDragon(room) {
 // Event phase
 // ---------------------------------------------------------------------------
 
-function runEventPhase(room) {
+function* eventPhaseSteps(room) {
     const g = room.game;
     g.phase = PHASE.EVENT;
 
@@ -1351,64 +1427,82 @@ function runEventPhase(room) {
         const tile = g.board[key];
         if (tile && tile.state === 'poisoned') tile.state = 'normal';
     }
+    if (g.poisonedCells.length) pushLog(room, '🌬️ Le nuage toxique se dissipe.');
     g.poisonedCells = [];
     g.poisonActive = false;
 
     if (g.eventDeck.length === 0) {
+        // Announce first (the client plays the "Mort subite" card), then roll.
         g.suddenDeath = true;
+        g.currentEvent = { type: 'sudden-death', label: 'Mort subite', doubled: false };
+        pushLog(room, '💀 MORT SUBITE : les ténèbres envahissent le Donjon !');
+        yield STEP_MS.card;
         resolveSuddenDeath(room);
+        yield STEP_MS.outro;
         return;
     }
 
     const card = g.eventDeck.shift();
     g.eventsResolved++;
-    resolveEvent(room, card);
+    g.currentEvent = { type: card.type, label: card.label, doubled: card.doubled };
+    pushLog(room, '🎴 Événement fâcheux : ' + card.label + '.');
+    yield STEP_MS.card;
+    yield* resolveEventSteps(room, card);
+    yield STEP_MS.outro;
 }
 
-function resolveEvent(room, card) {
+function* resolveEventSteps(room, card) {
     const g = room.game;
-    g.currentEvent = { type: card.type, label: card.label, doubled: card.doubled };
-    pushLog(room, '🎴 Événement fâcheux : ' + card.label);
-
     if (card.type === 'dragon') {
-        if (card.doubled) {
-            runDragonPhase(room, 2, 'event');  // existing dragons move twice
+        // Existing dragons move (twice on a x2 card), then up to 1 (or 2) new ones.
+        yield* dragonPhaseSteps(room, card.doubled ? 2 : 1, 'event');
+        if (g.status !== GAME_STATUS.PLAYING) return;
+        for (let i = 0; i < (card.doubled ? 2 : 1); i++) {
             spawnDragon(room);
-            spawnDragon(room);                 // up to 2 new dragons
-        } else {
-            runDragonPhase(room, 1, 'event');
-            spawnDragon(room);
+            yield STEP_MS.effect;
+            if (checkGameEnd(room)) return;
         }
+        g.dragonFocus = null;
         return;
     }
 
     const repeat = card.doubled ? 2 : 1;
     for (let i = 0; i < repeat; i++) {
+        if (repeat > 1) pushLog(room, '×2 : application ' + (i + 1) + ' / 2.');
         switch (card.type) {
             case 'curse': resolveCurse(room); break;
             case 'gloom': resolveGloom(room); break;
             case 'poison': resolvePoison(room); break;
             case 'fire': resolveFire(room); break;
         }
+        yield STEP_MS.effect;
+        if (checkGameEnd(room)) return;
     }
 }
 
 function resolveCurse(room) {
     const g = room.game;
+    const spared = [];
     for (const c of g.characters) {
         if (!c.conscious || c.escaped || c.dead) continue;
-        if (paladinProtects(g, c.row, c.col, c.id)) continue;
+        if (paladinProtects(g, c.row, c.col, c.id)) {
+            pushLog(room, '🛡️ Malédiction : ' + c.name + ' est protégé par le Paladin.');
+            continue;
+        }
         const roll = talent(c);
         if (!roll.success) {
             pushLog(room, '🌀 Malédiction : ' + c.name + ' échoue (dé ' + roll.value + ') et perd 1 PV.');
             applyDamage(room, c, 1);
+        } else {
+            spared.push(c.name + ' (dé ' + roll.value + ')');
         }
     }
+    if (spared.length) pushLog(room, '🌀 Malédiction : ' + spared.join(', ') + (spared.length > 1 ? ' résistent.' : ' résiste.'));
 }
 
 function resolveGloom(room) {
     const g = room.game;
-    let affected = 0;
+    let affected = 0, hurt = 0;
     // Step 1 : every Pénombre tile not already dark becomes Obscurité totale.
     for (const key of Object.keys(g.board)) {
         const tile = g.board[key];
@@ -1417,6 +1511,9 @@ function resolveGloom(room) {
             affected++;
         }
     }
+    if (affected === 0) pushLog(room, '🌑 Obscurité totale : aucune nouvelle tuile pénombre découverte.');
+    else pushLog(room, '🌑 Obscurité totale : ' + affected + ' tuile' + (affected > 1 ? 's' : '') +
+        ' pénombre plongée' + (affected > 1 ? 's' : '') + ' dans le noir.');
     // Step 2 : THEN every adventurer standing on a dark tile loses 1 HP — the
     // rulebook damages everyone in the dark, not only those on freshly
     // darkened tiles.
@@ -1424,25 +1521,37 @@ function resolveGloom(room) {
         const tile = g.board[key];
         if (tile.state !== 'dark') continue;
         for (const c of charsOnCell(g, tile.row, tile.col)) {
-            if (c.flags.nightVision) continue;
-            if (paladinProtects(g, c.row, c.col, c.id)) continue;
+            hurt++;
+            if (c.flags.nightVision) {
+                pushLog(room, '👁️ ' + c.name + ' voit dans le noir : aucun dégât.');
+                continue;
+            }
+            if (paladinProtects(g, c.row, c.col, c.id)) {
+                pushLog(room, '🛡️ ' + c.name + ' est protégé de l\'obscurité par le Paladin.');
+                continue;
+            }
             applyDamage(room, c, 1);
             pushLog(room, '🌑 ' + c.name + ' est surpris par l\'obscurité et perd 1 PV.');
         }
     }
-    if (affected === 0) pushLog(room, '🌑 Obscurité totale : aucune nouvelle tuile pénombre découverte.');
+    if (!hurt) pushLog(room, '🌑 Personne ne se trouvait dans l\'obscurité.');
 }
 
 function resolvePoison(room) {
     const g = room.game;
     const poisoned = [];
+    let hurt = 0;
     for (const key of Object.keys(g.board)) {
         const tile = g.board[key];
         if (tile.kind === 'poisonable') {
             tile.state = 'poisoned';
             poisoned.push(key);
             for (const c of charsOnCell(g, tile.row, tile.col)) {
-                if (paladinProtects(g, c.row, c.col, c.id)) continue;
+                hurt++;
+                if (paladinProtects(g, c.row, c.col, c.id)) {
+                    pushLog(room, '🛡️ ' + c.name + ' est protégé du poison par le Paladin.');
+                    continue;
+                }
                 applyDamage(room, c, 2);
                 pushLog(room, '☠️ ' + c.name + ' est empoisonné et perd 2 PV.');
             }
@@ -1452,21 +1561,28 @@ function resolvePoison(room) {
     // The cloud stays until the next event phase and also contaminates tiles
     // revealed in the meantime — which is what makes Explorer risky here.
     g.poisonActive = true;
-    if (poisoned.length === 0) pushLog(room, '☠️ Poison : aucune tuile nauséabonde découverte.');
+    const n = poisoned.length, s = n > 1 ? 's' : '';
+    if (n === 0) pushLog(room, '☠️ Poison : aucune tuile nauséabonde découverte (les prochaines le seront dès leur découverte).');
+    else pushLog(room, '☠️ Poison : ' + n + ' tuile' + s + ' nauséabonde' + s + ' empoisonnée' + s +
+        ' jusqu\'au prochain événement' + (hurt ? '.' : ', personne dessus.'));
 }
 
 function resolveFire(room) {
     const g = room.game;
     const die = Utils.rollDie();
     pushLog(room, '🎲 Incendie : le dé indique ' + die + '.');
-    let burned = 0;
+    let burned = 0, hurt = 0;
     for (const key of Object.keys(g.board)) {
         const tile = g.board[key];
         if (tile.kind === 'flammable' && tile.fireValues && tile.fireValues.includes(die) && tile.state !== 'fire') {
             tile.state = 'fire';
             burned++;
             for (const c of charsOnCell(g, tile.row, tile.col)) {
-                if (paladinProtects(g, c.row, c.col, c.id)) continue;
+                hurt++;
+                if (paladinProtects(g, c.row, c.col, c.id)) {
+                    pushLog(room, '🛡️ ' + c.name + ' est protégé des flammes par le Paladin.');
+                    continue;
+                }
                 const dmg = c.flags.fireResist ? 1 : 3;
                 applyDamage(room, c, dmg);
                 pushLog(room, '🔥 ' + c.name + ' est pris dans l\'incendie et perd ' + dmg + ' PV.');
@@ -1474,12 +1590,12 @@ function resolveFire(room) {
         }
     }
     if (burned === 0) pushLog(room, '🔥 Aucune tuile inflammable ne correspond au dé.');
+    else pushLog(room, '🔥 ' + burned + ' tuile' + (burned > 1 ? 's prennent' : ' prend') + ' feu' +
+        (hurt ? '.' : ', sans toucher personne.'));
 }
 
 function resolveSuddenDeath(room) {
     const g = room.game;
-    g.currentEvent = { type: 'sudden-death', label: 'Mort subite', doubled: false };
-    pushLog(room, '💀 MORT SUBITE : les ténèbres envahissent le Donjon !');
     const killed = [], survived = [];
     for (const c of g.characters) {
         if (c.escaped || c.dead) continue;
@@ -1609,6 +1725,8 @@ function buildState(room) {
             uses: c.uses
         })),
         dragons: g.dragons,
+        dragonFocus: g.dragonFocus || null,   // the dragon acting right now (+ its prey)
+        dragonStep: g.dragonStep || null,     // { index, total, pass, passes }
         activeId: g.activeId,
         activeOwnerId: active ? active.ownerId : null,
         ap: g.ap,

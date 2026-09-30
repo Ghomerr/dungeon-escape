@@ -8,6 +8,59 @@ date the version was cut, for example `## v1.0.0 — 2026-08-19`.
 Everything below `v1.0.0` predates that scheme: those releases were named after
 the day they shipped, and are kept under a `v0.` prefix (`v0.2026.08.19`).
 
+## v1.2.0 — 2026-09-30
+
+### Added
+- **The Dragon phase plays out on its own, dragon by dragon.** It used to be
+  resolved in the same instant as the bad event, so nobody ever saw a dragon
+  move. Now, once every adventurer has played:
+  - a small **banner at the top of the screen** says which phase is running
+    ("Phase des Dragons — Dragon 1 / 2", then "Événement fâcheux —
+    Malédiction"), without covering the board like a modal would;
+  - the dragons advance **one at a time**, about two seconds each, and the
+    **view follows the one that is moving**, which glows while it acts;
+  - a **journal toast at the bottom** says whom it is after ("Un dragon se
+    dirige vers Druide…"), and another one when a dragon finds no prey and
+    **disappears** — that dragon fades out on the board before leaving it.
+  The order is the rulebook's: Action, Dragons, then the bad event. Actions
+  are refused while these phases run, and they wait for missing players.
+- **The bad event is shown before it strikes.** The card is announced first,
+  its effects follow a moment later (each application of a ×2 card on its own),
+  and the results stay on screen for a few seconds before the next round.
+- **Clearer bad-event reports**: who resists the Curse and with which roll,
+  how many tiles catch fire / get poisoned / go dark, "sans toucher personne"
+  when nobody was hit, the Paladin's protection and the Shadow Hunter's night
+  vision spelled out, and why no dragon appeared (3 already in play, or no lair
+  within reach).
+- **Team resources explain themselves**: tapping the Kits, Pioche, Boules de
+  feu or Parchemins counter opens a small bubble saying what it is. The
+  Parchemins bubble carries the "Lire un Parchemin" button when somebody is
+  down.
+- **Every action can be read before it is used**: right-click on desktop, long
+  press on a phone, shows the description of an ability or action next to its
+  button — without triggering it, and even when it is greyed out.
+
+### Changed
+- **Journal toasts wait their turn** instead of pushing each other off screen:
+  at most three are shown, the others queue, each stays 3.5 to 9 seconds
+  depending on its length, and long lines wrap instead of being cut with "…".
+  A busy event phase could previously flash five lines and keep one.
+- **Lighter bad-event announcement on phones**: the central card is about half
+  its former size, and the event details modal is a centred dialog instead of
+  taking the whole screen.
+- The guided tour mentions the new gestures and the step-by-step Dragon phase.
+
+### Tooling
+- **`tools/devcheck.js`** now shoots the resource bubble, an action inspected by
+  right-click and by a synthetic long press (asserting it did not fire), a
+  staged Dragon phase / event card / result toasts on desktop and phone, and a
+  real end of round played by the server, asserting that the Dragon and event
+  phases each show on their own. It also restores the toasts that the sprite
+  shots hide.
+- The engine sequences the end of round as a generator of timed steps; the
+  server paces it (`room.pace`), while simulations and `check-fixes.js`, which
+  pass no pacer, still resolve a round instantly (89 assertions unchanged).
+
 ## v1.1.0 — 2026-09-28
 
 ### Added

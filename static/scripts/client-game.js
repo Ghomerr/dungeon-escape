@@ -178,7 +178,7 @@ $(document).ready(() => {
     $('#choice-dialog').dialog({ modal: true, autoOpen: false, width: 300 });
     $('#placement-dialog').dialog({ modal: true, autoOpen: false, width: 430 });
     $('#log-dialog').dialog({ modal: true, autoOpen: false, width: Math.min(560, $(window).width() - 30), height: Math.min(560, $(window).height() - 60), buttons: [{ text: 'Fermer', click: () => $('#log-dialog').dialog('close') }] });
-    $('#event-dialog').dialog({ modal: true, autoOpen: false, width: Math.min(420, $(window).width() - 30), buttons: [{ text: 'Fermer', click: () => $('#event-dialog').dialog('close') }] });
+    $('#event-dialog').dialog({ modal: true, autoOpen: false, width: Math.min(420, $(window).width() - 30), classes: { 'ui-dialog': 'compact-dialog' }, buttons: [{ text: 'Fermer', click: () => $('#event-dialog').dialog('close') }] });
     $('#char-dialog').dialog({ modal: true, autoOpen: false, width: Math.min(440, $(window).width() - 30), buttons: [{ text: 'Fermer', click: () => $('#char-dialog').dialog('close') }] });
 
     // Tapping a party card opens the adventurer's details + abilities (the hover
@@ -205,6 +205,18 @@ $(document).ready(() => {
     initUiModes();
     watchUiBreakpoint();
     $('#party-toggle').click(() => toggleUiMode('party'));
+
+    // Team resources: a tap explains what the counter is (the hover title is
+    // unreachable on touch screens). Parchemins are wired in renderScrolls.
+    $('#kit-res').on('click', function () { showResourceInfo('kits', this); });
+    $('#deck-res').on('click', function () { showResourceInfo('deck', this); });
+    $('#fireball-res').on('click', function () { showResourceInfo('fireball', this); });
+    // A tap anywhere else dismisses the info bubble (tiles and buttons have
+    // their own inspect gesture, which must not close it straight away).
+    $(document).on('click', (e) => {
+        if ($(e.target).closest('#tile-desc, .res, .tile, .round-act').length) return;
+        if ($('#tile-desc').is(':visible')) hideInfoPop();
+    });
     $('#actions-toggle').click(() => toggleUiMode('actions'));
 
     // Escape closes the guided tour, else leaves the board targeting mode
@@ -361,7 +373,8 @@ Socket.on('game-error', (data) => {
         'already-open': 'Ce côté est déjà ouvert : vous pouvez y découvrir une tuile directement.',
         'inspiration-used': 'Inspiration déjà utilisée ce tour-ci.',
         'run-move-only': 'Pendant une course / célérité, seul le déplacement est possible.',
-        'nothing-to-cancel': 'Rien à annuler (le déplacement a déjà commencé).'
+        'nothing-to-cancel': 'Rien à annuler (le déplacement a déjà commencé).',
+        'phase-running': 'Patientez : la phase des Dragons / de l\'événement fâcheux est en cours.'
     };
     // Ran out of action points on an action triggered from the board (a move
     // by clicking an adjacent tile, etc.): offer an Effort then replay it.
@@ -591,9 +604,15 @@ function tileFullLabel(tile) {
 // above / beside the tile and is clamped to the viewport when there is no room.
 function showTileDesc(tile, el) {
     const parts = tileFullLabel(tile).split('\n');
+    showInfoPop(escapeHtml(parts[0]), escapeHtml(parts[1] || ''), el);
+}
+
+// The same floating panel explains anything the player points at: a tile, a
+// team resource, an action button. `titleHtml` / `bodyHtml` are trusted HTML.
+function showInfoPop(titleHtml, bodyHtml, el, ms) {
     const $d = $('#tile-desc').removeClass('tile-desc-empty').html(
-        '<div class="td-title">' + escapeHtml(parts[0]) + '</div>' +
-        '<div class="td-body">' + escapeHtml(parts[1] || '') + '</div>');
+        '<div class="td-title">' + titleHtml + '</div>' +
+        '<div class="td-body">' + bodyHtml + '</div>');
     $d.stop(true, true).css('display', 'block').css('opacity', 1);
 
     if (el) {
@@ -615,7 +634,13 @@ function showTileDesc(tile, el) {
         });
     }
     clearTimeout(Game._tileDescTimer);
-    Game._tileDescTimer = setTimeout(() => $d.fadeOut(400), 5000);
+    Game._tileDescTimer = setTimeout(() => $d.fadeOut(400), ms || 6000);
+    return $d;
+}
+
+function hideInfoPop() {
+    clearTimeout(Game._tileDescTimer);
+    $('#tile-desc').stop(true, true).fadeOut(150);
 }
 
 // Dangers that make the active character lose HP just by entering `tile`
@@ -690,25 +715,30 @@ function moveWithConfirm(tile, ac, doIt) {
 // is a right-click on desktop and a long press on touch (see bindTileInspect).
 const LONG_PRESS_MS = 450;
 function bindTileInspect($el, tile) {
+    bindInspect($el, (el) => showTileDesc(tile, el));
+}
+
+// Right-click (desktop) or long press (touch) on `$el` runs `show(el)`. The
+// click the browser fires after a long press is swallowed, so inspecting a
+// tile never walks onto it and inspecting a button never triggers it.
+function bindInspect($el, show) {
+    const el0 = $el[0];
+    let timer = null, start = null, swallow = false;
     $el.on('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        showTileDesc(tile, e.currentTarget);
+        show(e.currentTarget);
     });
-    let timer = null, start = null;
     const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
     $el.on('touchstart', (e) => {
         const t = e.originalEvent.touches[0];
-        const el = e.currentTarget;
         start = { x: t.clientX, y: t.clientY };
         cancel();
         timer = setTimeout(() => {
             timer = null;
-            // Swallow the click that the browser fires after the press, so the
-            // adventurer does not walk onto the tile the player just inspected.
-            Game._suppressTileClick = true;
-            setTimeout(() => { Game._suppressTileClick = false; }, 700);
-            showTileDesc(tile, el);
+            swallow = true;
+            setTimeout(() => { swallow = false; }, 700);
+            show(el0);
         }, LONG_PRESS_MS);
     });
     $el.on('touchmove', (e) => {
@@ -718,10 +748,16 @@ function bindTileInspect($el, tile) {
         if (Math.abs(t.clientX - start.x) > 10 || Math.abs(t.clientY - start.y) > 10) cancel();
     });
     $el.on('touchend touchcancel', cancel);
+    // Capture phase: runs before the element's own click handlers.
+    el0.addEventListener('click', (e) => {
+        if (!swallow) return;
+        swallow = false;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+    }, true);
 }
 
 function onTileClick(tile, el) {
-    if (Game._suppressTileClick) { Game._suppressTileClick = false; return; }
     // While aiming an action, only the highlighted cells / tokens are actionable.
     if (Game.targeting) return;
     if (!isMyTurn()) return;
@@ -1000,6 +1036,7 @@ function render(state) {
     renderBoard(state);
     renderActions(state);
     renderLog(state);
+    renderPhaseBanner(state);
     renderPlacement(state);
     $('#kit-count').text(state.lockpickKits);
     $('#deck-count').text(state.deckLeft);
@@ -1033,19 +1070,46 @@ function renderScrolls(state) {
     const usable = state.scrolls > 0 && downed.length > 0;
     $('#scroll-count').text(state.scrolls);
     $res.css('display', '').toggleClass('res-ready', usable);
-    $res.off('click').on('click', () => {
-        if (!state.scrolls) {
-            Dialog.openSimpleDialog($('#simple-dialog'), 'Aucun parchemin',
-                'Votre équipe n\'a aucun Parchemin en réserve.');
-            return;
-        }
-        if (!downed.length) {
-            Dialog.openSimpleDialog($('#simple-dialog'), 'Personne à réveiller',
-                'Un Parchemin ne sert qu\'à réveiller un aventurier inconscient. Gardez-le pour plus tard !');
-            return;
-        }
-        openScrollTargetDialog(downed, state.scrolls);
+    // A tap explains the counter; when somebody is down and a scroll is in
+    // stock, the bubble also carries the button that reads one.
+    $res.off('click').on('click', function () {
+        const $pop = showResourceInfo('scroll', this, usable);
+        $pop.find('.td-use-scroll').on('click', () => {
+            hideInfoPop();
+            openScrollTargetDialog(downed, state.scrolls);
+        });
     });
+}
+
+/** Info bubble for a team resource counter (`kind`: kits, deck, fireball, scroll). */
+function showResourceInfo(kind, el, scrollUsable) {
+    const s = Game.state || {};
+    const n = (v) => '<b>' + (v != null ? v : '–') + '</b>';
+    let title = '', body = '';
+    if (kind === 'kits') {
+        title = faIco('key') + ' Kits de crochetage';
+        body = n(s.lockpickKits) + ' kit(s) restant(s), communs à toute l\'équipe.<br>' +
+            'L\'action <b>Crocheter une porte</b> ouvre la porte verrouillée de votre tuile (jet de talent). ' +
+            'Un kit n\'est consommé <b>qu\'en cas de réussite</b>. L\'Elfe Roublard crochète à coup sûr pour 1 PA.';
+    } else if (kind === 'deck') {
+        title = faIco('layer-group') + ' Pioche de tuiles';
+        body = n(s.deckLeft) + ' tuile(s) encore dans la pioche.<br>' +
+            'Chaque <b>Découverte</b> ou <b>Exploration</b> en tire une. La tuile <b>Sortie</b> est cachée parmi ' +
+            'les 5 dernières : plus la pioche baisse, plus elle est proche !';
+    } else if (kind === 'fireball') {
+        title = faIco('fire') + ' Boules de feu';
+        body = n($('#fireball-count').text()) + ' boule(s) de feu restante(s) sur 3 pour le Pyromancien.<br>' +
+            'Chacune (2 PA) perce une paroi pour ouvrir un passage, mais déclenche aussitôt un <b>Incendie</b>.';
+    } else if (kind === 'scroll') {
+        title = faIco('scroll') + ' Parchemins';
+        body = n(s.scrolls) + ' Parchemin(s) en réserve pour l\'équipe.<br>' +
+            'Lire un Parchemin <b>réveille un aventurier inconscient</b> (1 PV), où qu\'il soit, sans dépenser de PA. ' +
+            'On en trouve en terrassant un Dragon, en éteignant un incendie ou en perçant une paroi.' +
+            (scrollUsable
+                ? '<button class="td-action td-use-scroll">' + faIco('star-of-life') + ' Lire un Parchemin</button>'
+                : (s.scrolls ? '<div class="td-note">Personne n\'est inconscient : gardez-le pour plus tard.</div>' : ''));
+    }
+    return showInfoPop(title, body, el, scrollUsable ? 9000 : 7000);
 }
 
 /**
@@ -1329,16 +1393,60 @@ function renderLog(state) {
     Game._logLen = len;
 }
 
-// Slide a short-lived toast in from the bottom for a new journal line. Up to
-// MAX_TOASTS stay visible at once (oldest removed first).
+/**
+ * Small banner pinned at the top while the end-of-round phases play out: it
+ * says which phase is running and which dragon is acting, without hiding the
+ * board the way a real modal would.
+ */
+function renderPhaseBanner(state) {
+    const $b = $('#phase-banner');
+    const phase = state.status === 'PLAYING' ? state.phase : null;
+    if (phase !== 'DRAGON' && phase !== 'EVENT') { $b.hide(); return; }
+    const step = state.dragonStep;
+    const stepTxt = step ? 'Dragon ' + step.index + ' / ' + step.total +
+        (step.passes > 1 ? ' · déplacement ' + step.pass + ' / ' + step.passes : '') : '';
+    let icon, title, sub;
+    if (phase === 'DRAGON') {
+        icon = '<img class="pb-img" src="static/assets/adventurers/dragon_portrait.png" alt="">';
+        title = 'Phase des Dragons';
+        sub = stepTxt || (state.dragons.length ? state.dragons.length + ' dragon(s) dans le Donjon'
+            : 'Aucun dragon dans le Donjon');
+    } else {
+        const e = state.currentEvent;
+        icon = '<span class="pb-emoji">' + ((e && EVENT_INFO[e.type]) ? EVENT_INFO[e.type].icon : '🎴') + '</span>';
+        title = 'Événement fâcheux';
+        sub = (e ? escapeHtml(e.label) : '') + (stepTxt ? ' — ' + stepTxt : '');
+    }
+    $b.attr('class', 'phase-banner pb-' + phase.toLowerCase())
+        .html(icon + '<span class="pb-text"><span class="pb-title">' + title + '</span>' +
+            '<span class="pb-sub">' + sub + '</span></span>')
+        .css('display', 'flex');
+}
+
+// Slide a toast in from the bottom for each new journal line. At most
+// MAX_TOASTS are on screen; the others WAIT their turn instead of pushing the
+// visible ones out, so a busy event phase can still be read line by line.
 const MAX_TOASTS = 3;
 function pushLogToast(line) {
+    (Game._toastLines = Game._toastLines || []).push(line);
+    pumpLogToasts();
+}
+function pumpLogToasts() {
     const $wrap = $('#log-toast');
-    const $t = $('<div class="log-toast-line"><i class="fas fa-scroll"></i><span>' + escapeHtml(line) + '</span></div>');
-    $wrap.append($t);
-    while ($wrap.children().length > MAX_TOASTS) $wrap.children().first().remove();
-    requestAnimationFrame(() => $t.addClass('show'));
-    setTimeout(() => { $t.removeClass('show'); setTimeout(() => $t.remove(), 400); }, 4200);
+    const queue = Game._toastLines || [];
+    while (queue.length && $wrap.children('.log-toast-line:not(.leaving)').length < MAX_TOASTS) {
+        const line = queue.shift();
+        const $t = $('<div class="log-toast-line"><i class="fas fa-scroll"></i><span>' + escapeHtml(line) + '</span></div>');
+        $wrap.append($t);
+        requestAnimationFrame(() => $t.addClass('show'));
+        // Long enough to read: a base time plus a little per character, a bit
+        // shorter when a backlog is waiting.
+        const ms = Math.min(9000, 3500 + line.length * 45) - (queue.length > 4 ? 1500 : 0);
+        setTimeout(() => {
+            $t.addClass('leaving').removeClass('show');
+            setTimeout(() => { $t.remove(); pumpLogToasts(); }, 350);
+        }, ms);
+    }
 }
 function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -1516,9 +1624,13 @@ function renderBoard(state) {
                 faIco('scroll') + '</div>');
         }
 
+        const focus = state.dragonFocus;
         state.dragons.filter(d => d.row === t.row && d.col === t.col).forEach(d => {
-            const $tok = $('<span class="token dragon-token sprite-token dir-' + tokenDir('d' + d.id) +
-                '" style="--sprite:url(' + spriteUrl('dragon') + ')" title="Dragon"></span>');
+            // During the Dragon phase the acting dragon glows, and one that
+            // found no prey fades out before it leaves the board.
+            const phaseCls = (focus && focus.id === d.id ? ' dragon-active' : '') + (d.remove ? ' dragon-leaving' : '');
+            const $tok = $('<span class="token dragon-token sprite-token dir-' + tokenDir('d' + d.id) + phaseCls +
+                '" data-did="' + d.id + '" style="--sprite:url(' + spriteUrl('dragon') + ')" title="Dragon"></span>');
             $tile.append($tok);
             animateIfMoved($tok, $tile, 'd' + d.id, d.row, d.col, prevPos, curPos);
         });
@@ -1583,6 +1695,22 @@ function renderBoard(state) {
 
     Game._tokenPos = curPos;
     renderTokenActions($board, state, ac);
+
+    // Dragon phase: follow the dragon that is moving (its destination tile).
+    const df = state.dragonFocus;
+    const dragon = df && state.dragons.find(d => d.id === df.id);
+    const dragonKey = dragon ? dragon.id + '@' + dragon.row + ',' + dragon.col + '#' + state.log.length : null;
+    if (dragonKey && dragonKey !== Game._scrolledDragonKey) {
+        Game._scrolledDragonKey = dragonKey;
+        setTimeout(() => {
+            const el = document.querySelector('#board .dragon-token[data-did="' + dragon.id + '"]');
+            const tileEl = el && el.parentElement;
+            if (tileEl && tileEl.scrollIntoView) tileEl.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+        }, 60);
+    }
+    // Nobody active (end-of-round phases): the next adventurer to play will
+    // be re-centred, even if it is the same one as before.
+    if (!state.activeId) Game._scrolledActiveId = null;
 
     // When a new adventurer becomes active (turn start), scroll the board so
     // that adventurer is centred in the viewport.
@@ -1733,15 +1861,24 @@ function renderActions(state) {
         '<span class="act-ext"><span class="act-lbl">' + escapeHtml(label) + '</span>' +
         (extraTail !== undefined ? extraTail : costTail(cost)) + '</span>';
 
+    // "Disabled" is a class, not the attribute: a disabled <button> receives no
+    // pointer events at all, and the player must still be able to right-click /
+    // long-press it to read what it does.
+    const setEnabled = ($b, on) => $b.toggleClass('is-disabled', !on).attr('aria-disabled', on ? null : 'true');
+    const explain = ($b, icon, title, cost, desc) => bindInspect($b, (el) => showInfoPop(
+        icon + ' ' + escapeHtml(title) + ' <span class="td-cost">' + (cost ? cost + ' PA' : cost === 0 ? 'Passif' : '') + '</span>',
+        escapeHtml(desc || ''), el));
+
     const buildBtn = (def, isAbility) => {
         const icon = isAbility ? (ABILITY_ICON[def.abilityId] || '✨') : (ACTION_ICON[def.action] || '');
         const $b = $('<button class="round-act act-pill">' + pillHtml(icon, def.label, def.cost) + '</button>');
         $b.attr('title', def.label + (def.cost ? ' (' + def.cost + ' PA)' : '') + (def.tip ? ' — ' + def.tip : ''));
-        const normal = enabledFor(def);
-        const assist = !normal && effortAssistFor(def);
-        $b.prop('disabled', !(normal || assist));
+        const normal = enabledFor(def) && !def.exhausted;
+        const assist = !normal && !def.exhausted && effortAssistFor(def);
+        setEnabled($b, normal || assist);
         if (normal) $b.click(() => runActionMode(def.mode, def, isAbility));
         else if (assist) { $b.addClass('needs-effort'); $b.click(() => offerEffortThen(def.label, def.cost, () => runActionMode(def.mode, def, isAbility))); }
+        explain($b, icon, def.label, def.cost, def.tip);
         return $b;
     };
     // Cancel button shown in place of the Run / Celerity button until a move starts.
@@ -1750,7 +1887,7 @@ function renderActions(state) {
             pillHtml(faIco('rotate-left'), label, 0, '') + '</button>');
         $b.attr('title', label);
         const enabled = my && !blockedByPending && !!state.cancelRunKind;
-        $b.prop('disabled', !enabled);
+        setEnabled($b, enabled);
         if (enabled) $b.click(() => sendAction('cancel-run', {}));
         return $b;
     };
@@ -1763,6 +1900,7 @@ function renderActions(state) {
         $b.attr('title', a.name + ' (passif) — ' + a.description);
         $b.click(() => Dialog.openSimpleDialog($('#simple-dialog'),
             a.name + ' (passif)', escapeHtml(a.description), 360));
+        explain($b, ABILITY_ICON[a.id] || '✨', a.name, 0, a.description);
         return $b;
     };
 
@@ -1783,18 +1921,20 @@ function renderActions(state) {
         const $b = $('<button class="round-act act-pill">' +
             pillHtml(faIco('moon'), def.label, 0, '<span class="ap-cost">tout le tour</span>') + '</button>');
         $b.attr('title', 'Marche de l\'Ombre : réapparaissez sur une tuile Pénombre / Obscurité de votre choix. C\'est votre seule action du tour.');
-        $b.prop('disabled', !my || blockedByPending);
+        setEnabled($b, my && !blockedByPending);
         if (my && !blockedByPending) $b.click(() => runActionMode(def.mode, def, false));
+        explain($b, faIco('moon'), def.label, 0, $b.attr('title'));
         $abil.append($b);
         $('#base-actions').empty();
         $('#dungeon-actions').empty();
     } else if (ac) {
         ac.abilities.filter(a => !a.passive).forEach(a => {
             if (a.id === 'animal-celerity' && state.cancelRunKind === 'animal-celerity') { $abil.append(buildCancelBtn('Annuler la célérité')); return; }
-            const def = { action: 'ability', abilityId: a.id, label: a.name, cost: a.cost, mode: ABILITY_MODE[a.id] || 'none', tip: a.description };
-            const $b = buildBtn(def, true);
-            if (a.id === 'fireball' && ac.uses && ac.uses.fireball >= 3) $b.prop('disabled', true);
-            $abil.append($b);
+            const def = {
+                action: 'ability', abilityId: a.id, label: a.name, cost: a.cost, mode: ABILITY_MODE[a.id] || 'none', tip: a.description,
+                exhausted: a.id === 'fireball' && ac.uses && ac.uses.fireball >= 3
+            };
+            $abil.append(buildBtn(def, true));
         });
         ac.abilities.filter(a => a.passive).forEach(a => $abil.append(buildPassiveBtn(a)));
     }
@@ -1818,6 +1958,8 @@ function renderActions(state) {
     else if (blockedByPending) $('#board-hint').text('Choisissez l\'orientation de la tuile dans la fenêtre.');
     else if (my && ac && ac.conscious && running) $('#board-hint').text('Déplacement en cours (' + freeMoves + ' restant' + (freeMoves > 1 ? 's' : '') + ') : cliquez une tuile adjacente. Seul le déplacement est possible.');
     else if (my && ac && ac.conscious) $('#board-hint').text('Cliquez une tuile adjacente pour agir, ou un emplacement « + » pour explorer/découvrir. Clic droit (ou appui long) sur une tuile pour voir ce qu\'elle fait.');
+    else if (state.phase === 'DRAGON') $('#board-hint').text('Phase des Dragons : chaque dragon avance vers l\'aventurier le plus proche…');
+    else if (state.phase === 'EVENT') $('#board-hint').text('Phase de l\'événement fâcheux : résolution en cours…');
     else $('#board-hint').text('En attente du tour des autres joueurs…');
 }
 
@@ -1981,7 +2123,9 @@ const TUTO_STEPS = [
         title: 'Les capacités',
         html: '<p>Chaque aventurier a deux capacités qui lui sont propres : elles font toute la différence.</p>' +
             '<p>Les <b>actives</b> se déclenchent contre des PA. Les <b>passives</b> (bouton en pointillés) sont toujours ' +
-            'là — clique dessus pour lire ce qu\'elles font.</p>'
+            'là — clique dessus pour lire ce qu\'elles font.</p>' +
+            '<p>Pour lire la description de <b>n\'importe quelle action</b> sans la lancer : <b>clic droit</b> sur ' +
+            'ordinateur, <b>appui long</b> sur mobile.</p>'
     },
     {
         sel: '#board',
@@ -2011,7 +2155,8 @@ const TUTO_STEPS = [
         title: 'Les ressources de l\'équipe',
         html: '<p>🔑 Les <b>kits de crochetage</b> (6 pour toute la partie), 🃏 les tuiles restant dans la <b>pioche</b>, ' +
             'et 🔥 les <b>boules de feu</b> du Pyromancien s\'il est de la partie.</p>' +
-            '<p>Ces ressources sont communes : parlez-vous avant de les gaspiller !</p>'
+            '<p>Ces ressources sont communes : parlez-vous avant de les gaspiller ! <b>Touche un compteur</b> ' +
+            'pour savoir à quoi il sert.</p>'
     },
     {
         // Hidden when the items variant is off, so this step skips itself.
@@ -2025,7 +2170,7 @@ const TUTO_STEPS = [
             '<p>Lire un Parchemin <b>réveille un aventurier inconscient</b>, où qu\'il soit dans le Donjon, ' +
             'et <b>sans dépenser le moindre PA</b>.</p>' +
             '<p>Quand quelqu\'un tombe, le jeu te propose d\'en lire un tout de suite. Si tu refuses, il reste ' +
-            'en réserve : <b>clique sur ce compteur</b> plus tard pour choisir qui relever.</p>'
+            'en réserve : <b>touche ce compteur</b> plus tard, puis « Lire un Parchemin » pour choisir qui relever.</p>'
     },
     {
         sel: '#journal-btn',
@@ -2044,8 +2189,9 @@ const TUTO_STEPS = [
     },
     {
         title: 'Attention aux Dragons 🐉',
-        html: '<p>Après que tout le monde a joué, les <b>Dragons</b> présents avancent d\'une tuile vers l\'aventurier ' +
-            'le plus proche (le plus faible en cas d\'égalité).</p>' +
+        html: '<p>Après que tout le monde a joué vient la <b>phase des Dragons</b> : un par un, ils avancent d\'une ' +
+            'tuile vers l\'aventurier le plus proche (le plus faible en cas d\'égalité). La vue suit chaque dragon et un ' +
+            'message en bas de l\'écran dit qui il poursuit. Puis tombe l\'<b>événement fâcheux</b> du tour.</p>' +
             '<p>Un dragon sur ta tuile, et tu tombes <b>inconscient</b> sur-le-champ : 0 PV. Un aventurier inconscient ' +
             'ne joue plus — il faut qu\'un compagnon vienne le soigner.</p>' +
             '<p>Pour leur échapper : <b>Se cacher</b>, s\'éloigner de plus de 7 tuiles… ou le Paladin qui les terrasse !</p>'

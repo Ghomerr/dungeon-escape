@@ -761,9 +761,15 @@ async function run() {
                 victim.conscious = false;
                 render(st);
                 out.readyWithSomeoneDown = !!(document.querySelector('#scroll-res') || {}).classList.contains('res-ready');
-                // Clicking the counter must ALWAYS ask which fallen adventurer
-                // to raise — even when only one is down.
+                // Clicking the counter explains it, and offers to read one;
+                // that button must ALWAYS ask which fallen adventurer to
+                // raise — even when only one is down.
                 document.querySelector('#scroll-res').click();
+                const useBtn = document.querySelector('#tile-desc .td-use-scroll');
+                // position:fixed => offsetParent is always null: test display.
+                out.infoShown = $('#tile-desc').css('display') !== 'none';
+                out.useButton = !!useBtn;
+                if (useBtn) useBtn.click();
                 out.pickerOpen = !!document.querySelector('#choice-dialog').offsetParent;
                 out.pickerTitle = ($('#choice-dialog').dialog('option', 'title') || '');
                 out.pickerChoices = [...document.querySelectorAll('#choice-dialog .choice-btn')]
@@ -788,6 +794,9 @@ async function run() {
             }
             if (!itemsUi.hiddenWhenOff) {
                 problems.push({ kind: 'layout', text: 'the Parchemin counter shows even with items disabled' });
+            }
+            if (!itemsUi.infoShown || !itemsUi.useButton) {
+                problems.push({ kind: 'layout', text: 'clicking the Parchemin counter shows no info bubble with a "Lire" button' });
             }
             if (!itemsUi.pickerOpen || itemsUi.pickerChoices.length !== 1) {
                 problems.push({ kind: 'rules', text: 'clicking the Parchemin counter does not ask which adventurer to raise: ' + JSON.stringify(itemsUi.pickerChoices) });
@@ -980,6 +989,124 @@ async function run() {
         await cdp.eval(`(() => { const st = Game.state, u = window.__spriteUndo;
             const ac = st.characters.find(c => c.id === st.activeId);
             st.characters.forEach((c, i) => { c.row = u.pos[i][0]; c.col = u.pos[i][1]; }); Game._tokenPos = {}; st.board = u.board; st.dragons = u.dragons; render(st); return true; })()`);
+
+        //  (c) Info bubbles: a tap on a team resource, a right-click / long
+        //      press on an action button (which must NOT trigger the action).
+        const closeDialogs = `$('.ui-dialog-content').each(function () { try { $(this).dialog('close'); } catch (e) {} });`;
+        // The sprite shots above hid the toasts; bring them back.
+        await cdp.eval("$('#event-toast, #log-toast').css('visibility', ''); $('#log-toast').empty(); Game._toastLines = []; true");
+        for (const vp of [VIEWPORTS[0], VIEWPORTS[1]]) {
+            await setViewport(cdp, vp);
+            await cdp.eval(`(() => { ${closeDialogs} render(Game.state);
+                document.querySelector('#kit-res').click(); return true; })()`);
+            await sleep(300);
+            await shoot(cdp, '40-resource-info-' + vp.name);
+            const inspect = await cdp.eval(`
+                (async () => {
+                    const btn = document.querySelector('#ability-actions .act-pill:not(.passive-act)') ||
+                        document.querySelector('#base-actions .act-pill');
+                    if (!btn) return null;
+                    const out = { label: btn.textContent.trim() };
+                    ${vp.mobile ? `
+                    // Long press: touchstart, hold, release — then the click the browser sends.
+                    const r = btn.getBoundingClientRect();
+                    const touch = new Touch({ identifier: 1, target: btn, clientX: r.left + 5, clientY: r.top + 5 });
+                    btn.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], bubbles: true }));
+                    await new Promise(res => setTimeout(res, 650));
+                    btn.dispatchEvent(new TouchEvent('touchend', { touches: [], bubbles: true }));
+                    btn.click();` : `
+                    btn.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));`}
+                    const pop = document.querySelector('#tile-desc');
+                    out.shown = !!pop && getComputedStyle(pop).display !== 'none';
+                    out.text = pop ? pop.textContent.trim().slice(0, 80) : '';
+                    out.triggered = !!Game.targeting || $('.ui-dialog:visible').length > 0;
+                    return out;
+                })()`);
+            log('  · action inspect (' + vp.name + '): ' + JSON.stringify(inspect));
+            if (inspect && !inspect.shown) problems.push({ kind: 'layout', text: 'inspecting an action shows no description (' + vp.name + ')' });
+            if (inspect && inspect.triggered) problems.push({ kind: 'rules', text: 'inspecting an action also triggered it (' + vp.name + ')' });
+            await sleep(200);
+            await shoot(cdp, '41-action-info-' + vp.name);
+            await cdp.eval(`(() => { cancelTargeting(); ${closeDialogs} hideInfoPop(); return true; })()`);
+        }
+
+        //  (d) End-of-round phases, staged client-side: the top banner, the
+        //      focused dragon, the journal toasts at the bottom, the event card.
+        for (const vp of [VIEWPORTS[0], VIEWPORTS[1]]) {
+            await setViewport(cdp, vp);
+            await cdp.eval(`(() => {
+                ${closeDialogs}
+                const st = JSON.parse(JSON.stringify(Game.state));
+                const keys = Object.keys(st.board);
+                const t = st.board[keys[keys.length - 1]];
+                const prey = st.characters[0];
+                st.dragons = [{ id: 901, row: t.row, col: t.col }, { id: 902, row: prey.row, col: prey.col, remove: true }];
+                st.phase = 'DRAGON'; st.activeId = null; st.activeOwnerId = null;
+                st.dragonFocus = { id: 901, targetId: prey.id };
+                st.dragonStep = { index: 1, total: 2, pass: 1, passes: 1 };
+                st.log = st.log.concat(['🐉 Phase Dragon : 2 dragons se déplacent.',
+                    '🐉 Un dragon se dirige vers ' + prey.name + '...',
+                    '💨 Un dragon ne trouve plus de proie et disparaît du Donjon.']);
+                Game.state = st; render(st); return true; })()`);
+            await sleep(1500);
+            await shoot(cdp, '42-dragon-phase-' + vp.name);
+            await cdp.eval(`(() => {
+                const st = JSON.parse(JSON.stringify(Game.state));
+                st.phase = 'EVENT'; st.dragonFocus = null; st.dragonStep = null;
+                st.currentEvent = { type: 'curse', label: 'Malédiction', doubled: false };
+                st.eventsResolved = (st.eventsResolved || 0) + 1;
+                st.log = st.log.concat(['🎴 Événement fâcheux : Malédiction.']);
+                Game.state = st; render(st); return true; })()`);
+            await sleep(700);
+            await shoot(cdp, '43-event-card-' + vp.name);
+            await cdp.eval(`(() => {
+                const st = JSON.parse(JSON.stringify(Game.state));
+                const names = st.characters.map(c => c.name);
+                st.log = st.log.concat(['🌀 Malédiction : ' + names[0] + ' échoue (dé 2) et perd 1 PV.',
+                    '🌀 Malédiction : ' + names.slice(1).join(', ') + ' résistent.']);
+                Game.state = st; render(st); return true; })()`);
+            await sleep(800);
+            const toastProbe = await cdp.eval(`(() => ({ queued: (Game._toastLines || []).length,
+                lines: [...document.querySelectorAll('#log-toast .log-toast-line')].map(e => e.className + ' | ' +
+                    e.textContent.slice(0, 30)),
+                wrapDisplay: getComputedStyle(document.querySelector('#log-toast')).display }))()`);
+            log('  · journal toasts (' + vp.name + '): ' + JSON.stringify(toastProbe));
+            if (!toastProbe.lines.length) problems.push({ kind: 'layout', text: 'no journal toast during the event phase (' + vp.name + ')' });
+            await sleep(2500);   // the card toast is gone, the result lines remain
+            await shoot(cdp, '44-event-results-' + vp.name);
+        }
+        const bannerProbe = await cdp.eval(`(() => {
+            const b = document.querySelector('#phase-banner');
+            return { shown: !!b && getComputedStyle(b).display !== 'none', text: b ? b.textContent : '' }; })()`);
+        if (!bannerProbe.shown) problems.push({ kind: 'layout', text: 'no phase banner during the event phase' });
+
+        //  (e) The real thing: end every adventurer's turn and watch the
+        //      server play the Dragon phase then the bad event, step by step.
+        await setViewport(cdp, VIEWPORTS[0]);
+        // Forget the staged counters, so the real event and journal lines play.
+        await cdp.eval(`(() => { Game._lastEvents = undefined; Game._logLen = undefined;
+            Socket.emit('request-game-state', { roomId: Player.roomId }); return true; })()`);
+        await sleep(600);
+        for (let i = 0; i < 8; i++) {
+            const more = await cdp.eval(`(() => { if (!isMyTurn()) return false; sendAction('end-turn', {}); return true; })()`);
+            if (!more) break;
+            await sleep(400);
+        }
+        const live = [];
+        for (let i = 0; i < 12; i++) {
+            const snap = await cdp.eval(`(() => ({ phase: Game.state.phase, round: Game.state.round,
+                banner: $('#phase-banner:visible').text(), toast: $('#event-toast:visible').text() }))()`);
+            live.push(snap);
+            if (i === 0) await shoot(cdp, '45-live-dragon-phase');
+            if (snap.phase === 'EVENT' && !live.some(s => s.shot)) { snap.shot = true; await shoot(cdp, '46-live-event'); }
+            if (snap.phase === 'ACTION') break;
+            await sleep(700);
+        }
+        log('  · live phases: ' + JSON.stringify(live.map(s => s.phase + (s.banner ? ' [' + s.banner + ']' : ''))));
+        if (!live.some(s => s.phase === 'DRAGON')) problems.push({ kind: 'rules', text: 'the Dragon phase was not shown on its own' });
+        if (!live.some(s => s.phase === 'EVENT')) problems.push({ kind: 'rules', text: 'the bad-event phase was not shown on its own' });
+        await sleep(1500);
+        await shoot(cdp, '47-live-after');
 
         // Extra element shots requested on the command line (--shot name=selector).
         for (let i = 0; i < args.length; i++) {

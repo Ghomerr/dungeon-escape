@@ -1116,3 +1116,71 @@ body.in-game #game-emoji-bar.open {
     body.in-game .dir-btn { min-width: 108px; padding: 12px; font-size: 1rem; }
     body.in-game .choice-btn { padding: 13px 14px; font-size: 1rem; }
 }
+
+/* ---- Info bubble (tiles, team resources, action descriptions) ---- */
+.tile-desc { z-index: 960; max-width: min(300px, calc(100vw - 16px)); }
+.tile-desc .td-title .fas { color: var(--gold); margin-right: 2px; }
+.tile-desc .td-cost { font-weight: normal; font-size: .72rem; color: #ffd23f; margin-left: 4px; }
+.tile-desc .td-note { margin-top: 6px; font-style: italic; }
+.tile-desc .td-action {
+    display: block; width: 100%; margin-top: 8px; padding: 7px 10px; font-size: .85rem;
+    background: linear-gradient(to bottom, #c79a47, #9c7327); color: #1c1208; border-radius: 6px;
+}
+.resources .res { cursor: pointer; }
+
+/* Action pills stay inspectable when unavailable, so "disabled" is a class. */
+.round-act.is-disabled { opacity: .45; cursor: not-allowed; }
+.round-act.is-disabled:active { transform: none; }
+/* No iOS callout / text selection on a long press. */
+.round-act, .res, .tile { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+/* ---- End-of-round phase banner (Dragon phase, bad-event phase) ---- */
+.phase-banner {
+    position: fixed; top: calc(var(--header-h, 52px) + 8px); left: 50%; transform: translateX(-50%);
+    z-index: 950; display: flex; align-items: center; gap: 10px;
+    max-width: min(92vw, 420px); padding: 6px 14px 6px 8px;
+    background: #241a10f2; border: 1px solid var(--border); border-radius: 999px;
+    box-shadow: 0 6px 22px #000b; pointer-events: none;
+    animation: pb-in .3s ease-out;
+}
+.phase-banner.pb-dragon { border-color: #ff3b1f; box-shadow: 0 6px 22px #000b, 0 0 14px #ff3b1f66; }
+.phase-banner.pb-event { border-color: var(--gold); }
+.phase-banner .pb-img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid #ff3b1f; }
+.phase-banner .pb-emoji { font-size: 1.6rem; line-height: 1; width: 38px; text-align: center; }
+.phase-banner .pb-text { display: flex; flex-direction: column; min-width: 0; }
+.phase-banner .pb-title { font-weight: bold; color: var(--gold-light); font-size: .95rem; }
+.phase-banner .pb-sub { color: var(--muted); font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@keyframes pb-in { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* The dragon acting right now, and a dragon giving up. */
+.dragon-token.dragon-active { z-index: 8; filter: drop-shadow(0 0 6px #ff3b1f) drop-shadow(0 0 12px #ff8a3d); }
+.dragon-token.dragon-leaving { opacity: .35; filter: grayscale(.7); transition: opacity 1.2s ease; }
+
+/* Journal toasts: wrap instead of truncating, so a whole line can be read. */
+.log-toast { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+.log-toast-line span { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; }
+
+/* ---- Phones: a lighter bad-event announcement ---- */
+@media (max-width: 760px), (max-height: 560px) {
+    .event-toast { padding: 10px 16px; gap: 4px; border-radius: 12px; border-width: 2px; top: 42%; }
+    .event-toast .toast-img { width: min(240px, 60vw); border-radius: 8px; }
+    .event-toast .toast-icon { font-size: 2.2rem; }
+    .event-toast .toast-label { font-size: 1.25rem; letter-spacing: 0; }
+    .event-toast .toast-sub { font-size: .85rem; }
+    .log-toast-line { font-size: .78rem; padding: 6px 10px; }
+    .phase-banner { padding: 4px 12px 4px 6px; gap: 8px; }
+    .phase-banner .pb-img, .phase-banner .pb-emoji { width: 30px; height: 30px; font-size: 1.3rem; }
+    .phase-banner .pb-title { font-size: .85rem; }
+    .phase-banner .pb-sub { font-size: .72rem; }
+}
+/* The event details modal is short: keep it a real (centred) dialog on phones
+   instead of the full-screen treatment the other in-game modals get. */
+@media (max-width: 820px) {
+    body.in-game .ui-dialog.compact-dialog {
+        top: 50% !important; left: 50% !important; transform: translate(-50%, -50%);
+        width: min(420px, calc(100vw - 24px)) !important; height: auto !important;
+        max-height: 80dvh !important; border-radius: 10px !important;
+    }
+    body.in-game .ui-dialog.compact-dialog .ui-dialog-titlebar { border-radius: 8px 8px 0 0; }
+    body.in-game .ui-dialog.compact-dialog .ui-dialog-content { max-height: calc(80dvh - 110px) !important; }
+}

@@ -102,6 +102,19 @@ function emitGameState(room) {
     io.to(room.id).emit('game-state', Game.buildState(room));
 }
 
+// The Dragon and bad-event phases play out step by step: wait, run the next
+// step, show everyone the result. A paused game holds the sequence until the
+// missing players are back; a closed room simply drops it.
+function paceStep(room, ms, next) {
+    setTimeout(() => {
+        if (ROOMS[room.id] !== room || !room.game) return;
+        if (room.status === STATUS.IN_GAME_MISSING_PLAYERS) { paceStep(room, 500, next); return; }
+        if (room.status !== STATUS.IN_GAME) return;
+        next();
+        emitGameState(room);
+    }, ms);
+}
+
 // --- Pause / reconnection / room lifecycle ---------------------------------
 
 function countMissing(room) {
@@ -320,6 +333,7 @@ io.on('connection', (Socket) => {
                 io.to(room.id).emit('ready-players-amount', { readyPlayersAmout: ready, totalPlayers: total });
             } else {
                 room.status = STATUS.IN_GAME;
+                room.pace = (ms, next) => paceStep(room, ms, next);
                 Game.initGame(room);
                 io.to(room.id).emit('all-players-ready-to-play');
                 emitGameState(room);
