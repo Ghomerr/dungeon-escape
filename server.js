@@ -7,6 +7,7 @@ const path = require('path');
 // Load scripts
 const Utils = require('./server/utils.js');
 const Game = require('./server/game.js');
+const Analytics = require('./server/analytics.js');
 
 // Load data
 const PACKAGE = require('./package.json');
@@ -55,6 +56,12 @@ app.get('/manifest.webmanifest', (req, res) => {
     res.type('application/manifest+json');
     res.sendFile(path.resolve(__dirname, 'static/manifest.webmanifest'));
 });
+// Browser-side analytics (cookieless). Empty when POSTHOG_KEY is not set.
+app.get('/analytics.js', (req, res) => {
+    res.type('application/javascript');
+    res.set('Cache-Control', 'no-cache');
+    res.send(Analytics.clientScript());
+});
 app.use(express.static(path.resolve(__dirname, '.')));
 
 // ---------------------------------------------------------------------------
@@ -100,6 +107,7 @@ function emitPlayerListChanged(room) {
 
 function emitGameState(room) {
     io.to(room.id).emit('game-state', Game.buildState(room));
+    Analytics.checkGameEnded(room);
 }
 
 // The Dragon and bad-event phases play out step by step: wait, run the next
@@ -146,6 +154,7 @@ function destroyRoom(roomId) {
 function endGameByTimeout(roomId) {
     const room = ROOMS[roomId];
     if (!room) return;
+    Analytics.gameAborted(room, 'joueurs_partis');
     io.to(roomId).emit('game-aborted', { reason: 'timeout' });
     destroyRoom(roomId);
 }
@@ -335,6 +344,7 @@ io.on('connection', (Socket) => {
                 room.status = STATUS.IN_GAME;
                 room.pace = (ms, next) => paceStep(room, ms, next);
                 Game.initGame(room);
+                Analytics.gameStarted(room);
                 io.to(room.id).emit('all-players-ready-to-play');
                 emitGameState(room);
             }
@@ -380,6 +390,7 @@ io.on('connection', (Socket) => {
     Socket.on('end-game-early', (data) => {
         requireOwner(data, (room) => {
             if (room.status !== STATUS.IN_GAME && room.status !== STATUS.IN_GAME_MISSING_PLAYERS) return;
+            Analytics.gameAborted(room, 'arretee_par_hote');
             io.to(room.id).emit('game-aborted', { reason: 'host-ended' });
             destroyRoom(room.id);
         });

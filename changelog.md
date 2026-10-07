@@ -8,6 +8,17 @@ date the version was cut, for example `## v1.0.0 — 2026-08-19`.
 Everything below `v1.0.0` predates that scheme: those releases were named after
 the day they shipped, and are kept under a `v0.` prefix (`v0.2026.08.19`).
 
+## Unreleased
+
+### Added
+- **Anonymous game statistics** sent to PostHog (EU cloud), only when the
+  `POSTHOG_KEY` environment variable is set, so local games are never recorded.
+  The server reports `partie_lancee`, `partie_terminee` (result, rank, escaped,
+  survivors, turns, duration…) and `partie_abandonnee`, with the game setup
+  (difficulty, players, adventurers, variants). No player or room names.
+- Cookieless visit statistics on the home page, served as `/analytics.js`
+  (empty when analytics are disabled, never cached by the service worker).
+
 ## v1.2.0 — 2026-09-30
 
 ### Added

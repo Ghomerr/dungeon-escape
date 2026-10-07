@@ -43,6 +43,8 @@ self.addEventListener('fetch', (e) => {
     // Never touch same-origin realtime traffic or cross-origin requests.
     if (url.origin !== self.location.origin) return;
     if (url.pathname.startsWith('/socket.io')) return;
+    // Analytics script : always fresh (enabled or not depending on the server config).
+    if (url.pathname === '/analytics.js') return;
     // Local development: never serve from the cache. The cache-first rule below
     // would otherwise hand back yesterday's CSS / JS after an edit, which reads
     // exactly like a styling bug.
